@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useForm, SubmitHandler } from 'react-hook-form';
+import { motion } from 'framer-motion';
 
 /**
  * Interface for Results page props
@@ -21,6 +22,7 @@ interface FormInputs {
 /**
  * Results page component
  * This page displays the assessment results and collects user information
+ * with Typeform-like aesthetic and animations
  */
 const Results: React.FC<ResultsProps> = ({ score: propScore }) => {
   // Initialize the navigate function from React Router
@@ -61,15 +63,45 @@ const Results: React.FC<ResultsProps> = ({ score: propScore }) => {
     navigate('/thankyou');
   };
 
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { 
+      opacity: 1,
+      transition: { 
+        duration: 0.5,
+        when: "beforeChildren",
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { 
+      opacity: 1, 
+      y: 0,
+      transition: { duration: 0.5 }
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-      <div className="max-w-2xl w-full bg-white rounded-lg shadow-lg p-8">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">
+    <div className="typeform-container">
+      <motion.div 
+        className="typeform-card"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.h1 
+          className="typeform-heading"
+          variants={itemVariants}
+        >
           Your Assessment Results
-        </h1>
+        </motion.h1>
 
         {/* Results display */}
-        <div className="mb-8">
+        <motion.div className="mb-8" variants={itemVariants}>
           {/* Vulnerability level indicator */}
           <div className="flex justify-center mb-4">
             <div className={`text-${vulnerability.color}-600 text-2xl font-bold px-6 py-2 rounded-full ${
@@ -89,7 +121,7 @@ const Results: React.FC<ResultsProps> = ({ score: propScore }) => {
           </div>
           
           {/* Vulnerability description */}
-          <p className="text-gray-600 text-center mb-4">
+          <p className="typeform-text">
             {score <= 30 && "Your business shows low vulnerability to AI disruption. However, staying informed about AI advancements is still important."}
             {score > 30 && score <= 70 && "Your business shows moderate vulnerability to AI disruption. Consider exploring AI integration strategies."}
             {score > 70 && "Your business shows high vulnerability to AI disruption. Immediate action is recommended to adapt your business model."}
@@ -97,15 +129,15 @@ const Results: React.FC<ResultsProps> = ({ score: propScore }) => {
           
           {/* Divider */}
           <div className="border-t border-gray-200 my-6"></div>
-        </div>
+        </motion.div>
 
         {/* Lead capture form */}
         {!isSubmitted ? (
-          <div>
+          <motion.div variants={itemVariants}>
             <h2 className="text-xl font-semibold text-gray-800 mb-4">
               Get Your Detailed Report
             </h2>
-            <p className="text-gray-600 mb-6">
+            <p className="typeform-text">
               Enter your details below to receive a comprehensive analysis of your business's AI vulnerability and personalized recommendations.
             </p>
             
@@ -170,7 +202,7 @@ const Results: React.FC<ResultsProps> = ({ score: propScore }) => {
               <div className="pt-3">
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white font-medium py-3 px-4 rounded-md transition duration-300 transform hover:-translate-y-1 shadow-md"
+                  className="typeform-button-primary w-full"
                 >
                   Get My Detailed Report
                 </button>
@@ -181,9 +213,14 @@ const Results: React.FC<ResultsProps> = ({ score: propScore }) => {
                 We respect your privacy. Your information will not be shared with third parties.
               </p>
             </form>
-          </div>
+          </motion.div>
         ) : (
-          <div className="text-center py-6">
+          <motion.div 
+            className="text-center py-6"
+            variants={itemVariants}
+            initial="hidden"
+            animate="visible"
+          >
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg 
                 xmlns="http://www.w3.org/2000/svg" 
@@ -205,13 +242,13 @@ const Results: React.FC<ResultsProps> = ({ score: propScore }) => {
             </p>
             <button
               onClick={handleContinue}
-              className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white font-medium py-3 px-8 rounded-md transition duration-300 transform hover:-translate-y-1 shadow-md"
+              className="typeform-button-primary"
             >
               Continue
             </button>
-          </div>
+          </motion.div>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 };

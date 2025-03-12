@@ -1,0 +1,91 @@
+/* Import Tailwind CSS */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Google Fonts - Inter */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Global styles */
+:root {
+  --color-primary: #3b82f6;
+  --color-primary-dark: #2563eb;
+  --color-success: #10b981;
+  --color-success-dark: #059669;
+  --color-danger: #ef4444;
+  --color-danger-dark: #dc2626;
+  --color-background: #f5f7fa;
+  --color-card: #ffffff;
+  --color-text: #1f2937;
+  --color-text-light: #6b7280;
+}
+
+/* Base styles */
+body {
+  font-family: 'Inter', sans-serif;
+  background: linear-gradient(to bottom, var(--color-background), var(--color-card));
+  background-attachment: fixed;
+  color: var(--color-text);
+  min-height: 100vh;
+}
+
+/* Custom utility classes */
+.typeform-container {
+  @apply flex flex-col items-center justify-center min-h-screen p-4;
+}
+
+.typeform-card {
+  @apply bg-white rounded-xl shadow-md max-w-full sm:max-w-md md:max-w-lg w-full p-6 md:p-8;
+}
+
+.typeform-heading {
+  @apply text-2xl md:text-3xl font-bold text-center mb-6;
+}
+
+.typeform-text {
+  @apply text-gray-600 text-center mb-8;
+}
+
+.typeform-button-primary {
+  @apply bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 transform hover:-translate-y-1;
+}
+
+.typeform-button-success {
+  @apply bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 transform hover:-translate-y-1;
+}
+
+.typeform-button-danger {
+  @apply bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 transform hover:-translate-y-1;
+}
+
+.typeform-progress-container {
+  @apply w-full mb-6;
+}
+
+.typeform-progress-bar {
+  @apply w-full h-2 bg-gray-200 rounded-full overflow-hidden;
+}
+
+.typeform-progress-fill {
+  @apply h-full bg-blue-500 transition-all duration-500;
+}
+
+.typeform-progress-text {
+  @apply flex justify-between text-sm text-gray-600 mb-2;
+}
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+} 

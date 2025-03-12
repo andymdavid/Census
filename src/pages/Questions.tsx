@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import questions from '../data/questions';
 
 /**
@@ -10,6 +11,7 @@ interface QuestionsProps {}
 /**
  * Questions page component
  * This page displays the assessment questions and collects user responses
+ * with a Typeform-like aesthetic and animations
  */
 const Questions: React.FC<QuestionsProps> = () => {
   // Initialize the navigate function from React Router
@@ -45,48 +47,97 @@ const Questions: React.FC<QuestionsProps> = () => {
   // Current question
   const question = questions[currentQuestion];
 
+  // Animation variants for Framer Motion
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { 
+      opacity: 1,
+      transition: { 
+        duration: 0.5,
+        when: "beforeChildren",
+        staggerChildren: 0.1
+      }
+    },
+    exit: { 
+      opacity: 0,
+      transition: { duration: 0.3 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { 
+      opacity: 1, 
+      y: 0,
+      transition: { duration: 0.5 }
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-      <div className="max-w-2xl w-full bg-white rounded-lg shadow-lg p-8">
+    // Main container with typeform styling
+    <div className="typeform-container">
+      {/* Card container */}
+      <div className="typeform-card">
         {/* Progress indicator */}
-        <div className="mb-6">
-          <div className="flex justify-between text-sm text-gray-600 mb-2">
+        <div className="typeform-progress-container">
+          <div className="typeform-progress-text">
             <span>Question {currentQuestion + 1} of {questions.length}</span>
             <span>Category: {question.category}</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div className="typeform-progress-bar">
             <div 
-              className="bg-blue-600 h-2.5 rounded-full" 
+              className="typeform-progress-fill" 
               style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
             ></div>
           </div>
         </div>
 
-        {/* Question */}
-        <h2 className="text-xl font-semibold text-gray-800 mb-8 text-center">
-          {question.text}
-        </h2>
-
-        {/* Answer buttons */}
-        <div className="flex justify-center space-x-4">
-          <button
-            onClick={() => handleAnswer(true)}
-            className="bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-8 rounded-md transition duration-300"
+        {/* Animated question content */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentQuestion}
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="flex flex-col items-center"
           >
-            Yes
-          </button>
-          <button
-            onClick={() => handleAnswer(false)}
-            className="bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-8 rounded-md transition duration-300"
-          >
-            No
-          </button>
-        </div>
+            {/* Question */}
+            <motion.h2 
+              variants={itemVariants}
+              className="typeform-heading"
+            >
+              {question.text}
+            </motion.h2>
 
-        {/* Score display (for development purposes) */}
-        <div className="mt-8 text-center text-gray-500">
-          Current score: {score} / 100
-        </div>
+            {/* Answer buttons */}
+            <motion.div 
+              variants={itemVariants}
+              className="flex flex-col sm:flex-row justify-center gap-4 w-full max-w-xs mx-auto"
+            >
+              <button
+                onClick={() => handleAnswer(true)}
+                className="typeform-button-success"
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => handleAnswer(false)}
+                className="typeform-button-danger"
+              >
+                No
+              </button>
+            </motion.div>
+
+            {/* Score display (for development purposes) */}
+            <motion.div 
+              variants={itemVariants}
+              className="text-gray-500 text-sm mt-8"
+            >
+              Current score: {score} / 100
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
