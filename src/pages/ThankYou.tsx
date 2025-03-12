@@ -9,19 +9,13 @@ interface ThankYouProps {}
 
 /**
  * ThankYou page component
- * This is the final page shown after the user completes the assessment and submits their information
- * with Typeform-like aesthetic and animations
+ * This page is displayed after the user completes the assessment and submits their information
  */
 const ThankYou: React.FC<ThankYouProps> = () => {
   // Initialize the navigate function from React Router
   const navigate = useNavigate();
 
-  // Function to handle button click and navigate back to Welcome page
-  const handleBackToHome = () => {
-    navigate('/');
-  };
-
-  // Animation variants
+  // Animation variants for Framer Motion
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { 
@@ -29,7 +23,7 @@ const ThankYou: React.FC<ThankYouProps> = () => {
       transition: { 
         duration: 0.5,
         when: "beforeChildren",
-        staggerChildren: 0.2
+        staggerChildren: 0.1
       }
     }
   };
@@ -43,80 +37,91 @@ const ThankYou: React.FC<ThankYouProps> = () => {
     }
   };
 
+  // Button hover animation variants
+  const buttonVariants = {
+    hover: { 
+      scale: 1.03,
+      transition: { duration: 0.2 }
+    },
+    tap: { 
+      scale: 0.98,
+      transition: { duration: 0.1 }
+    }
+  };
+
   return (
-    <div className="typeform-container">
-      <motion.div 
-        className="typeform-card text-center"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <motion.div 
-          className="flex justify-center mb-6"
-          variants={itemVariants}
+    <div className="typeform-fullscreen">
+      <div className="typeform-content">
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="flex flex-col items-center w-full"
         >
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-8 w-8 text-green-600" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M5 13l4 4L19 7" 
-              />
+          <motion.div 
+            variants={itemVariants}
+            className="mb-8"
+          >
+            <svg className="w-20 h-20 text-primary mx-auto" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
             </svg>
-          </div>
+          </motion.div>
+          
+          <motion.h1 
+            variants={itemVariants}
+            className="text-3xl font-bold text-gray-800 mb-4 text-center"
+          >
+            Thank You!
+          </motion.h1>
+          
+          <motion.p 
+            variants={itemVariants}
+            className="text-gray-600 mb-8 text-center max-w-2xl"
+          >
+            Your detailed AI disruption assessment report has been sent to your email.
+            Check your inbox for insights and recommendations.
+          </motion.p>
+          
+          <motion.div 
+            variants={itemVariants}
+            className="mb-8"
+          >
+            <h3 className="text-xl font-semibold text-gray-800 mb-4 text-center">
+              Next Steps
+            </h3>
+            <ul className="text-gray-600 space-y-3 max-w-md">
+              <li className="flex items-start">
+                <svg className="w-5 h-5 mr-2 text-primary mt-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
+                </svg>
+                <span>Review your detailed report to understand your AI disruption risk factors</span>
+              </li>
+              <li className="flex items-start">
+                <svg className="w-5 h-5 mr-2 text-primary mt-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
+                </svg>
+                <span>Share the assessment with colleagues to align on AI readiness</span>
+              </li>
+              <li className="flex items-start">
+                <svg className="w-5 h-5 mr-2 text-primary mt-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
+                </svg>
+                <span>Schedule a consultation with our AI experts to discuss your results</span>
+              </li>
+            </ul>
+          </motion.div>
+          
+          <motion.button
+            variants={buttonVariants}
+            onClick={() => navigate('/')}
+            className="typeform-button"
+            whileHover="hover"
+            whileTap="tap"
+          >
+            Back to Home
+          </motion.button>
         </motion.div>
-        <motion.h1 
-          className="typeform-heading"
-          variants={itemVariants}
-        >
-          Thank You!
-        </motion.h1>
-        <motion.p 
-          className="typeform-text"
-          variants={itemVariants}
-        >
-          Your detailed AI vulnerability assessment report has been sent to your email.
-          Our team will be in touch shortly to discuss how we can help your business navigate the AI revolution.
-        </motion.p>
-        <motion.div 
-          className="mb-8"
-          variants={itemVariants}
-        >
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">
-            What's Next?
-          </h2>
-          <ul className="text-left text-gray-600 space-y-2">
-            <li className="flex items-start">
-              <span className="text-green-600 mr-2">✓</span>
-              <span>Review your detailed report</span>
-            </li>
-            <li className="flex items-start">
-              <span className="text-green-600 mr-2">✓</span>
-              <span>Schedule a consultation with our AI experts</span>
-            </li>
-            <li className="flex items-start">
-              <span className="text-green-600 mr-2">✓</span>
-              <span>Explore our resources on AI adaptation strategies</span>
-            </li>
-          </ul>
-        </motion.div>
-        <motion.button 
-          onClick={handleBackToHome}
-          className="typeform-button-primary"
-          variants={itemVariants}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          Back to Home
-        </motion.button>
-      </motion.div>
+      </div>
     </div>
   );
 };

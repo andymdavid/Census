@@ -25,10 +25,10 @@ function App() {
           <Route path="/questions" element={<Questions />} />
           
           {/* Results page - Assessment results and lead capture */}
-          <Route path="/results" element={<Results score={0} />} />
+          <Route path="/results" element={<Results />} />
           
           {/* Thank You page - Final page after submission */}
-          <Route path="/thankyou" element={<ThankYou />} />
+          <Route path="/thank-you" element={<ThankYou />} />
         </Routes>
       </div>
     </Router>

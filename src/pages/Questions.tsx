@@ -73,23 +73,36 @@ const Questions: React.FC<QuestionsProps> = () => {
     }
   };
 
+  // Button hover animation variants
+  const buttonVariants = {
+    hover: { 
+      scale: 1.03,
+      transition: { duration: 0.2 }
+    },
+    tap: { 
+      scale: 0.98,
+      transition: { duration: 0.1 }
+    }
+  };
+
   return (
-    // Main container with typeform styling
-    <div className="typeform-container">
-      {/* Card container */}
-      <div className="typeform-card">
-        {/* Progress indicator */}
-        <div className="typeform-progress-container">
-          <div className="typeform-progress-text">
-            <span>Question {currentQuestion + 1} of {questions.length}</span>
-            <span>Category: {question.category}</span>
-          </div>
-          <div className="typeform-progress-bar">
-            <div 
-              className="typeform-progress-fill" 
-              style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
-            ></div>
-          </div>
+    // Full-screen container
+    <div className="typeform-fullscreen">
+      {/* Top progress bar */}
+      <div className="typeform-top-progress">
+        <div className="typeform-thin-progress">
+          <div 
+            className="typeform-thin-progress-fill" 
+            style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
+          ></div>
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div className="typeform-content">
+        {/* Question counter - small and subtle */}
+        <div className="text-sm text-gray-400 mb-8 text-center font-medium">
+          Question {currentQuestion + 1} of {questions.length}
         </div>
 
         {/* Animated question content */}
@@ -100,39 +113,53 @@ const Questions: React.FC<QuestionsProps> = () => {
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="flex flex-col items-center"
+            className="flex flex-col items-center w-full"
           >
-            {/* Question */}
+            {/* Category label - small and above question */}
+            <motion.div 
+              variants={itemVariants}
+              className="typeform-category"
+            >
+              {question.category}
+            </motion.div>
+
+            {/* Question - larger and more prominent */}
             <motion.h2 
               variants={itemVariants}
-              className="typeform-heading"
+              className="typeform-question"
             >
               {question.text}
             </motion.h2>
 
-            {/* Answer buttons */}
+            {/* Answer buttons - better spacing */}
             <motion.div 
               variants={itemVariants}
-              className="flex flex-col sm:flex-row justify-center gap-4 w-full max-w-xs mx-auto"
+              className="typeform-options"
             >
-              <button
+              <motion.button
                 onClick={() => handleAnswer(true)}
-                className="typeform-button-success"
+                className="typeform-option-button typeform-option-yes"
+                variants={buttonVariants}
+                whileHover="hover"
+                whileTap="tap"
               >
                 Yes
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 onClick={() => handleAnswer(false)}
-                className="typeform-button-danger"
+                className="typeform-option-button typeform-option-no"
+                variants={buttonVariants}
+                whileHover="hover"
+                whileTap="tap"
               >
                 No
-              </button>
+              </motion.button>
             </motion.div>
 
             {/* Score display (for development purposes) */}
             <motion.div 
               variants={itemVariants}
-              className="text-gray-500 text-sm mt-8"
+              className="text-gray-400 text-sm mt-16 font-medium"
             >
               Current score: {score} / 100
             </motion.div>

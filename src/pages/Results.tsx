@@ -1,66 +1,57 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useForm, SubmitHandler } from 'react-hook-form';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 /**
  * Interface for Results page props
  */
-interface ResultsProps {
-  score: number;
-}
-
-/**
- * Interface for form input fields
- */
-interface FormInputs {
-  name: string;
-  email: string;
-  company?: string; // Optional field
-}
+interface ResultsProps {}
 
 /**
  * Results page component
  * This page displays the assessment results and collects user information
- * with Typeform-like aesthetic and animations
  */
-const Results: React.FC<ResultsProps> = ({ score: propScore }) => {
-  // Initialize the navigate function from React Router
-  const navigate = useNavigate();
-  
-  // Get location state (score) from navigation
+const Results: React.FC<ResultsProps> = () => {
+  // Get the score from the location state
   const location = useLocation();
-  const score = location.state?.score || propScore;
+  const navigate = useNavigate();
+  const score = location.state?.score || 0;
 
-  // State to track if form is submitted
-  const [isSubmitted, setIsSubmitted] = useState(false);
-
-  // Initialize react-hook-form
-  const { 
-    register, 
-    handleSubmit, 
-    formState: { errors } 
-  } = useForm<FormInputs>();
-
-  // Calculate vulnerability level based on score
-  const getVulnerabilityLevel = () => {
-    if (score <= 30) return { level: 'Low', color: 'green' };
-    if (score <= 70) return { level: 'Medium', color: 'yellow' };
-    return { level: 'High', color: 'red' };
-  };
-
-  const vulnerability = getVulnerabilityLevel();
+  // State for form inputs
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [company, setCompany] = useState('');
+  const [submitted, setSubmitted] = useState(false);
 
   // Handle form submission
-  const onSubmit: SubmitHandler<FormInputs> = (data) => {
-    // TODO: Implement API call to save user data
-    console.log('Form submitted:', { ...data, score });
-    setIsSubmitted(true);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // In a real app, you would send this data to a server
+    console.log({ name, email, company, score });
+    setSubmitted(true);
+    
+    // Navigate to thank you page
+    setTimeout(() => {
+      navigate('/thank-you');
+    }, 1500);
   };
 
-  // Handle navigation to Thank You page
-  const handleContinue = () => {
-    navigate('/thankyou');
+  // Get result category based on score
+  const getResultCategory = () => {
+    if (score < 30) return 'Low Risk';
+    if (score < 60) return 'Medium Risk';
+    return 'High Risk';
+  };
+
+  // Get result description based on score
+  const getResultDescription = () => {
+    if (score < 30) {
+      return 'Your role or business appears to have a lower risk of AI disruption in the near term. However, staying informed about AI developments is still important.';
+    }
+    if (score < 60) {
+      return 'Your role or business shows moderate vulnerability to AI disruption. Consider exploring how AI might augment your work or create new opportunities.';
+    }
+    return 'Your role or business shows significant vulnerability to AI disruption. We recommend developing a strategy to adapt to AI changes in your industry.';
   };
 
   // Animation variants
@@ -85,170 +76,125 @@ const Results: React.FC<ResultsProps> = ({ score: propScore }) => {
     }
   };
 
+  // Button hover animation variants
+  const buttonVariants = {
+    hover: { 
+      scale: 1.03,
+      transition: { duration: 0.2 }
+    },
+    tap: { 
+      scale: 0.98,
+      transition: { duration: 0.1 }
+    }
+  };
+
   return (
-    <div className="typeform-container">
-      <motion.div 
-        className="typeform-card"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <motion.h1 
-          className="typeform-heading"
-          variants={itemVariants}
-        >
-          Your Assessment Results
-        </motion.h1>
-
-        {/* Results display */}
-        <motion.div className="mb-8" variants={itemVariants}>
-          {/* Vulnerability level indicator */}
-          <div className="flex justify-center mb-4">
-            <div className={`text-${vulnerability.color}-600 text-2xl font-bold px-6 py-2 rounded-full ${
-              vulnerability.color === 'green' ? 'bg-green-50' : 
-              vulnerability.color === 'yellow' ? 'bg-yellow-50' : 
-              'bg-red-50'
-            }`}>
-              {vulnerability.level} Vulnerability
-            </div>
-          </div>
-          
-          {/* Score display */}
-          <div className="flex justify-center mb-6">
-            <div className="text-5xl font-bold">
-              {score} / 100
-            </div>
-          </div>
-          
-          {/* Vulnerability description */}
-          <p className="typeform-text">
-            {score <= 30 && "Your business shows low vulnerability to AI disruption. However, staying informed about AI advancements is still important."}
-            {score > 30 && score <= 70 && "Your business shows moderate vulnerability to AI disruption. Consider exploring AI integration strategies."}
-            {score > 70 && "Your business shows high vulnerability to AI disruption. Immediate action is recommended to adapt your business model."}
-          </p>
-          
-          {/* Divider */}
-          <div className="border-t border-gray-200 my-6"></div>
-        </motion.div>
-
-        {/* Lead capture form */}
-        {!isSubmitted ? (
-          <motion.div variants={itemVariants}>
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">
-              Get Your Detailed Report
-            </h2>
-            <p className="typeform-text">
-              Enter your details below to receive a comprehensive analysis of your business's AI vulnerability and personalized recommendations.
-            </p>
-            
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-              {/* Name field */}
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                  Full Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  className={`w-full px-4 py-3 border ${errors.name ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200`}
-                  placeholder="John Doe"
-                  {...register('name', { 
-                    required: 'Name is required' 
-                  })}
-                />
-                {errors.name && (
-                  <p className="mt-1 text-sm text-red-500">{errors.name.message}</p>
-                )}
-              </div>
-              
-              {/* Email field */}
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  className={`w-full px-4 py-3 border ${errors.email ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200`}
-                  placeholder="john@example.com"
-                  {...register('email', { 
-                    required: 'Email is required',
-                    pattern: {
-                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                      message: 'Invalid email address'
-                    }
-                  })}
-                />
-                {errors.email && (
-                  <p className="mt-1 text-sm text-red-500">{errors.email.message}</p>
-                )}
-              </div>
-              
-              {/* Company field */}
-              <div>
-                <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
-                  Company Name <span className="text-gray-400">(Optional)</span>
-                </label>
-                <input
-                  id="company"
-                  type="text"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200"
-                  placeholder="Acme Inc."
-                  {...register('company')}
-                />
-              </div>
-              
-              {/* Submit button */}
-              <div className="pt-3">
-                <button
-                  type="submit"
-                  className="typeform-button-primary w-full"
-                >
-                  Get My Detailed Report
-                </button>
-              </div>
-              
-              {/* Privacy note */}
-              <p className="text-xs text-gray-500 text-center mt-4">
-                We respect your privacy. Your information will not be shared with third parties.
-              </p>
-            </form>
+    <div className="typeform-fullscreen">
+      <div className="typeform-content">
+        {submitted ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <div className="text-2xl font-bold text-gray-800 mb-4">Thank you!</div>
+            <div className="text-gray-600">Redirecting you to the next step...</div>
           </motion.div>
         ) : (
-          <motion.div 
-            className="text-center py-6"
-            variants={itemVariants}
+          <motion.div
+            variants={containerVariants}
             initial="hidden"
             animate="visible"
+            className="flex flex-col items-center w-full"
           >
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-8 w-8 text-green-600" 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={2} 
-                  d="M5 13l4 4L19 7" 
-                />
-              </svg>
-            </div>
-            <p className="text-green-600 font-medium mb-6 text-xl">
-              Thank you! Your detailed report has been sent to your email.
-            </p>
-            <button
-              onClick={handleContinue}
-              className="typeform-button-primary"
+            <motion.div 
+              variants={itemVariants}
+              className="text-sm text-gray-400 mb-4 font-medium"
             >
-              Continue
-            </button>
+              Your Assessment Results
+            </motion.div>
+            
+            <motion.h2 
+              variants={itemVariants}
+              className="text-3xl font-bold text-gray-800 mb-2 text-center"
+            >
+              {getResultCategory()}
+            </motion.h2>
+            
+            <motion.div 
+              variants={itemVariants}
+              className="flex items-center justify-center mb-6"
+            >
+              <div className="text-4xl font-bold text-primary">{score}</div>
+              <div className="text-gray-500 ml-2">/ 100</div>
+            </motion.div>
+            
+            <motion.p 
+              variants={itemVariants}
+              className="text-gray-600 mb-8 text-center max-w-2xl"
+            >
+              {getResultDescription()}
+            </motion.p>
+            
+            <motion.form 
+              variants={itemVariants}
+              onSubmit={handleSubmit}
+              className="w-full max-w-md"
+            >
+              <div className="mb-6">
+                <label htmlFor="name" className="block text-sm font-medium text-gray-600 mb-2">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  required
+                />
+              </div>
+              
+              <div className="mb-6">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-600 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  required
+                />
+              </div>
+              
+              <div className="mb-8">
+                <label htmlFor="company" className="block text-sm font-medium text-gray-600 mb-2">
+                  Company
+                </label>
+                <input
+                  type="text"
+                  id="company"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+              </div>
+              
+              <motion.button
+                type="submit"
+                className="typeform-button w-full"
+                variants={buttonVariants}
+                whileHover="hover"
+                whileTap="tap"
+              >
+                Get Detailed Report
+              </motion.button>
+            </motion.form>
           </motion.div>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 };
