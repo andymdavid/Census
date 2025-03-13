@@ -1,12 +1,39 @@
 import React from 'react';
 import './App.css';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 
 // Import page components
 import Welcome from './pages/Welcome';
 import Questions from './pages/Questions';
 import Results from './pages/Results';
 import ThankYou from './pages/ThankYou';
+
+/**
+ * AnimatedRoutes component
+ * This component wraps the routes with AnimatePresence for page transitions
+ */
+const AnimatedRoutes = () => {
+  const location = useLocation();
+  
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        {/* Welcome page - Landing page */}
+        <Route path="/" element={<Welcome />} />
+        
+        {/* Questions page - Assessment questions */}
+        <Route path="/questions" element={<Questions />} />
+        
+        {/* Results page - Assessment results and lead capture */}
+        <Route path="/results" element={<Results />} />
+        
+        {/* Thank You page - Final page after submission */}
+        <Route path="/thank-you" element={<ThankYou />} />
+      </Routes>
+    </AnimatePresence>
+  );
+};
 
 /**
  * Main App component
@@ -17,19 +44,7 @@ function App() {
   return (
     <Router>
       <div className="App">
-        <Routes>
-          {/* Welcome page - Landing page */}
-          <Route path="/" element={<Welcome />} />
-          
-          {/* Questions page - Assessment questions */}
-          <Route path="/questions" element={<Questions />} />
-          
-          {/* Results page - Assessment results and lead capture */}
-          <Route path="/results" element={<Results />} />
-          
-          {/* Thank You page - Final page after submission */}
-          <Route path="/thank-you" element={<ThankYou />} />
-        </Routes>
+        <AnimatedRoutes />
       </div>
     </Router>
   );

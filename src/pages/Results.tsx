@@ -22,6 +22,8 @@ const Results: React.FC<ResultsProps> = () => {
   const [name, setName] = useState('');
   const [company, setCompany] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  // State to track if we're transitioning out
+  const [isExiting, setIsExiting] = useState(false);
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -30,10 +32,15 @@ const Results: React.FC<ResultsProps> = () => {
     console.log({ name, email, company, score });
     setSubmitted(true);
     
-    // Navigate to thank you page
+    // Delay navigation to allow transition animation
     setTimeout(() => {
-      navigate('/thank-you');
-    }, 1500);
+      setIsExiting(true);
+      
+      // Navigate to thank you page after exit animation
+      setTimeout(() => {
+        navigate('/thank-you');
+      }, 500);
+    }, 1000);
   };
 
   // Get result category based on score
@@ -46,15 +53,38 @@ const Results: React.FC<ResultsProps> = () => {
   // Get result description based on score
   const getResultDescription = () => {
     if (score < 30) {
-      return 'Your role or business appears to have a lower risk of AI disruption in the near term. However, staying informed about AI developments is still important.';
+      return 'Your business appears to have a lower risk of AI disruption in the near term. However, staying informed about AI developments is still important.';
     }
     if (score < 60) {
-      return 'Your role or business shows moderate vulnerability to AI disruption. Consider exploring how AI might augment your work or create new opportunities.';
+      return 'Your business shows moderate vulnerability to AI disruption. Consider exploring how AI might augment your work or create new opportunities.';
     }
-    return 'Your role or business shows significant vulnerability to AI disruption. We recommend developing a strategy to adapt to AI changes in your industry.';
+    return 'Your business shows significant vulnerability to AI disruption. Get in touch with Stakwork to learn more about how we can help your business take advantage of AI.';
   };
 
   // Animation variants
+  const pageVariants = {
+    initial: {
+      opacity: 0,
+      y: 20
+    },
+    animate: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.6,
+        ease: "easeOut"
+      }
+    },
+    exit: {
+      opacity: 0,
+      y: -20,
+      transition: {
+        duration: 0.5,
+        ease: "easeIn"
+      }
+    }
+  };
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { 
@@ -63,6 +93,12 @@ const Results: React.FC<ResultsProps> = () => {
         duration: 0.5,
         when: "beforeChildren",
         staggerChildren: 0.1
+      }
+    },
+    exit: {
+      opacity: 0,
+      transition: {
+        duration: 0.3
       }
     }
   };
@@ -89,8 +125,19 @@ const Results: React.FC<ResultsProps> = () => {
   };
 
   return (
-    <div className="typeform-fullscreen">
-      <div className="typeform-content">
+    <motion.div 
+      className="typeform-fullscreen"
+      variants={pageVariants}
+      initial="initial"
+      animate={isExiting ? "exit" : "animate"}
+      exit="exit"
+    >
+      <motion.div 
+        className="typeform-content"
+        variants={containerVariants}
+        initial="hidden"
+        animate={isExiting ? "exit" : "visible"}
+      >
         {submitted ? (
           <motion.div
             initial={{ opacity: 0 }}
@@ -102,9 +149,6 @@ const Results: React.FC<ResultsProps> = () => {
           </motion.div>
         ) : (
           <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
             className="flex flex-col items-center w-full"
           >
             <motion.div 
@@ -189,13 +233,13 @@ const Results: React.FC<ResultsProps> = () => {
                 whileHover="hover"
                 whileTap="tap"
               >
-                Get Detailed Report
+                Contact Stakwork
               </motion.button>
             </motion.form>
           </motion.div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
@@ -14,8 +14,42 @@ interface ThankYouProps {}
 const ThankYou: React.FC<ThankYouProps> = () => {
   // Initialize the navigate function from React Router
   const navigate = useNavigate();
+  // State to track if we're transitioning out
+  const [isExiting, setIsExiting] = useState(false);
+
+  // Handle back to home button click
+  const handleBackToHome = () => {
+    setIsExiting(true);
+    // Delay navigation to allow exit animation to play
+    setTimeout(() => {
+      navigate('/');
+    }, 500);
+  };
 
   // Animation variants for Framer Motion
+  const pageVariants = {
+    initial: {
+      opacity: 0,
+      y: 20
+    },
+    animate: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.6,
+        ease: "easeOut"
+      }
+    },
+    exit: {
+      opacity: 0,
+      y: -20,
+      transition: {
+        duration: 0.5,
+        ease: "easeIn"
+      }
+    }
+  };
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { 
@@ -24,6 +58,12 @@ const ThankYou: React.FC<ThankYouProps> = () => {
         duration: 0.5,
         when: "beforeChildren",
         staggerChildren: 0.1
+      }
+    },
+    exit: {
+      opacity: 0,
+      transition: {
+        duration: 0.3
       }
     }
   };
@@ -50,12 +90,20 @@ const ThankYou: React.FC<ThankYouProps> = () => {
   };
 
   return (
-    <div className="typeform-fullscreen">
-      <div className="typeform-content">
+    <motion.div 
+      className="typeform-fullscreen"
+      variants={pageVariants}
+      initial="initial"
+      animate={isExiting ? "exit" : "animate"}
+      exit="exit"
+    >
+      <motion.div 
+        className="typeform-content"
+        variants={containerVariants}
+        initial="hidden"
+        animate={isExiting ? "exit" : "visible"}
+      >
         <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
           className="flex flex-col items-center w-full"
         >
           <motion.div 
@@ -113,7 +161,7 @@ const ThankYou: React.FC<ThankYouProps> = () => {
           
           <motion.button
             variants={buttonVariants}
-            onClick={() => navigate('/')}
+            onClick={handleBackToHome}
             className="typeform-button"
             whileHover="hover"
             whileTap="tap"
@@ -121,8 +169,8 @@ const ThankYou: React.FC<ThankYouProps> = () => {
             Back to Home
           </motion.button>
         </motion.div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 

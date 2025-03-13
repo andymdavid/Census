@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
@@ -14,8 +14,42 @@ interface WelcomeProps {}
 const Welcome: React.FC<WelcomeProps> = () => {
   // Initialize the navigate function from React Router
   const navigate = useNavigate();
+  // State to track if we're transitioning out
+  const [isExiting, setIsExiting] = useState(false);
+
+  // Handle start assessment button click
+  const handleStartAssessment = () => {
+    setIsExiting(true);
+    // Delay navigation to allow exit animation to play
+    setTimeout(() => {
+      navigate('/questions');
+    }, 500);
+  };
 
   // Animation variants for Framer Motion
+  const pageVariants = {
+    initial: {
+      opacity: 0,
+      y: 20
+    },
+    animate: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.6,
+        ease: "easeOut"
+      }
+    },
+    exit: {
+      opacity: 0,
+      y: -20,
+      transition: {
+        duration: 0.5,
+        ease: "easeIn"
+      }
+    }
+  };
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { 
@@ -24,6 +58,12 @@ const Welcome: React.FC<WelcomeProps> = () => {
         duration: 0.5,
         when: "beforeChildren",
         staggerChildren: 0.1
+      }
+    },
+    exit: {
+      opacity: 0,
+      transition: {
+        duration: 0.3
       }
     }
   };
@@ -50,12 +90,20 @@ const Welcome: React.FC<WelcomeProps> = () => {
   };
 
   return (
-    <div className="typeform-fullscreen">
-      <div className="typeform-content">
+    <motion.div 
+      className="typeform-fullscreen"
+      variants={pageVariants}
+      initial="initial"
+      animate={isExiting ? "exit" : "animate"}
+      exit="exit"
+    >
+      <motion.div 
+        className="typeform-content"
+        variants={containerVariants}
+        initial="hidden"
+        animate={isExiting ? "exit" : "visible"}
+      >
         <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
           className="flex flex-col items-center w-full"
         >
           <motion.h1 
@@ -69,7 +117,7 @@ const Welcome: React.FC<WelcomeProps> = () => {
             variants={itemVariants}
             className="text-gray-600 mb-8 text-center max-w-2xl"
           >
-            This assessment will help you understand how AI might impact your role or business.
+            This assessment will help you understand how AI might impact your business.
             Answer 12 simple questions to receive a personalized disruption score and recommendations.
           </motion.p>
           
@@ -101,7 +149,7 @@ const Welcome: React.FC<WelcomeProps> = () => {
           
           <motion.button
             variants={buttonVariants}
-            onClick={() => navigate('/questions')}
+            onClick={handleStartAssessment}
             className="typeform-button"
             whileHover="hover"
             whileTap="tap"
@@ -109,8 +157,8 @@ const Welcome: React.FC<WelcomeProps> = () => {
             Start Assessment
           </motion.button>
         </motion.div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 

@@ -13,33 +13,33 @@ export interface Question {
 /**
  * Assessment questions
  * Total weight: 100 points
- * Categories: Load (40 points), Language (30 points), Labour (30 points)
+ * Categories: Labour (30 points), Language (30 points), Load (40 points)
  */
 const questions: Question[] = [
-  // Load category questions (40 points)
+  // Labour category questions (30 points)
   { 
     id: 1, 
-    text: "Does your business depend on defined processes that follow a specific sequence of steps?", 
-    weight: 14, 
-    category: "Load" 
+    text: "Do employee salaries and wages make up more than 50% of your business expenses?", 
+    weight: 10, 
+    category: "Labour" 
   },
   { 
     id: 2, 
-    text: "Are these processes performed the same way each time?", 
-    weight: 10, 
-    category: "Load" 
+    text: "Do most of your employees use similar skills to complete their tasks?", 
+    weight: 7, 
+    category: "Labour" 
   },
   { 
     id: 3, 
-    text: "Can these processes be documented as a standard set of steps?", 
-    weight: 10, 
-    category: "Load" 
+    text: "Are these tasks relatively simple and straightforward to complete?", 
+    weight: 7, 
+    category: "Labour" 
   },
   { 
     id: 4, 
-    text: "Would your business remain competitive if these processes were automated?", 
+    text: "Can your business handle mistakes in these tasks without significant financial loss or customer impact?", 
     weight: 6, 
-    category: "Load" 
+    category: "Labour" 
   },
   
   // Language category questions (30 points)
@@ -68,30 +68,30 @@ const questions: Question[] = [
     category: "Language" 
   },
   
-  // Labour category questions (45 points)
+  // Load category questions (40 points)
   { 
     id: 9, 
-    text: "Do employee salaries and wages make up more than 50% of your business expenses?", 
-    weight: 10, 
-    category: "Labour" 
+    text: "Does your business depend on defined processes that follow a specific sequence of steps?", 
+    weight: 14, 
+    category: "Load" 
   },
   { 
     id: 10, 
-    text: "Do most of your employees use similar skills to complete their tasks?", 
-    weight: 7, 
-    category: "Labour" 
+    text: "Are these processes performed the same way each time?", 
+    weight: 10, 
+    category: "Load" 
   },
   { 
     id: 11, 
-    text: "Are these tasks relatively simple and straightforward to complete?", 
-    weight: 7, 
-    category: "Labour" 
+    text: "Can these processes be documented as a standard set of steps?", 
+    weight: 10, 
+    category: "Load" 
   },
   { 
     id: 12, 
-    text: "Can your business handle mistakes in these tasks without significant financial loss or customer impact?", 
+    text: "Would your business remain competitive if these processes were automated?", 
     weight: 6, 
-    category: "Labour" 
+    category: "Load" 
   },
 ];
 
