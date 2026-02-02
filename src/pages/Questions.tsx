@@ -2,24 +2,27 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { loadForm } from '../data/loadForm';
-
-const form = loadForm();
-const questions = form.questions;
-const totalScore = form.totalScore;
+import type { LoadedFormSchema } from '../types/formSchema';
 
 /**
  * Interface for Questions page props
  */
-interface QuestionsProps {}
+interface QuestionsProps {
+  form?: LoadedFormSchema;
+  formId?: string;
+}
 
 /**
  * Questions page component
  * This page displays the assessment questions and collects user responses
  * with a Typeform-like aesthetic and animations
  */
-const Questions: React.FC<QuestionsProps> = () => {
+const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => {
   // Initialize the navigate function from React Router
   const navigate = useNavigate();
+  const form = formOverride ?? loadForm();
+  const questions = form.questions;
+  const totalScore = form.totalScore;
 
   // State to track current question index
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -33,7 +36,31 @@ const Questions: React.FC<QuestionsProps> = () => {
   const [direction, setDirection] = useState(1); // 1 for forward, -1 for backward
 
   // Handle answer selection
-  const handleAnswer = (answer: boolean) => {
+  const submitResponse = async (answersSnapshot: boolean[], finalScore: number) => {
+    if (!formId) return;
+
+    const payload = {
+      answers: questions.map((question, index) => ({
+        questionId: String(question.id),
+        answer: answersSnapshot[index] ? 'yes' : 'no',
+      })),
+      score: finalScore,
+    };
+
+    try {
+      await fetch(`/api/forms/${formId}/responses`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // Ignore submission errors for now.
+    }
+  };
+
+  const handleAnswer = async (answer: boolean) => {
     const newAnswers = [...answers];
     newAnswers[currentQuestion] = answer;
     setAnswers(newAnswers);
@@ -52,9 +79,10 @@ const Questions: React.FC<QuestionsProps> = () => {
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(prevQuestion => prevQuestion + 1);
     } else {
+      await submitResponse(newAnswers, updatedScore);
       // Navigate to results page with the final score
       // Use the updated score directly to ensure the last question's score is included
-      navigate('/results', { state: { score: updatedScore } });
+      navigate('/results', { state: { score: updatedScore, form } });
     }
   };
 

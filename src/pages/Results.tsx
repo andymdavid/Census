@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { loadForm } from '../data/loadForm';
+import type { LoadedFormSchema } from '../types/formSchema';
 
-const form = loadForm();
+const defaultForm = loadForm();
 
 /**
  * Interface for Results page props
@@ -19,6 +20,7 @@ const Results: React.FC<ResultsProps> = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const score = location.state?.score || 0;
+  const form = (location.state?.form as LoadedFormSchema | undefined) ?? defaultForm;
 
   // State for form inputs
   const [email, setEmail] = useState('');

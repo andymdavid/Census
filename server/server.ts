@@ -1,6 +1,7 @@
 import type { Server } from 'bun';
 import { handleAuthRoutes } from './routes/auth';
 import { handleFormsRoutes } from './routes/forms';
+import { handleResponsesRoutes } from './routes/responses';
 
 const publicDir = `${process.cwd()}/public`;
 
@@ -23,6 +24,10 @@ const handler = async (request: Request, server: Server) => {
 
   if (url.pathname.startsWith('/api/auth/')) {
     return handleAuthRoutes(request);
+  }
+
+  if (url.pathname.includes('/responses')) {
+    return handleResponsesRoutes(request);
   }
 
   if (url.pathname.startsWith('/api/forms')) {

@@ -22,4 +22,24 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS responses (
+    id TEXT PRIMARY KEY,
+    form_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    score INTEGER NOT NULL,
+    meta_json TEXT
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS answers (
+    id TEXT PRIMARY KEY,
+    response_id TEXT NOT NULL,
+    question_id TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+`);
+
 export default db;

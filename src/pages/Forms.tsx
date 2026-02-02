@@ -77,12 +77,20 @@ const Forms: React.FC = () => {
                       Updated {new Date(form.updated_at).toLocaleString()}
                     </div>
                   </div>
-                  <Link
-                    to={`/forms/${form.id}/edit`}
-                    className="text-sm font-medium text-primary hover:text-primary/80"
-                  >
-                    Edit
-                  </Link>
+                  <div className="flex items-center gap-4">
+                    <Link
+                      to={`/forms/${form.id}/analytics`}
+                      className="text-sm font-medium text-gray-600 hover:text-gray-800"
+                    >
+                      Analytics
+                    </Link>
+                    <Link
+                      to={`/forms/${form.id}/edit`}
+                      className="text-sm font-medium text-primary hover:text-primary/80"
+                    >
+                      Edit
+                    </Link>
+                  </div>
                 </div>
               ))}
             </div>

@@ -10,6 +10,8 @@ import Results from './pages/Results';
 import ThankYou from './pages/ThankYou';
 import Forms from './pages/Forms';
 import Builder from './pages/Builder';
+import Analytics from './pages/Analytics';
+import PublicForm from './pages/PublicForm';
 
 /**
  * AnimatedRoutes component
@@ -38,6 +40,12 @@ const AnimatedRoutes = () => {
 
         {/* Form builder page */}
         <Route path="/forms/:id/edit" element={<Builder />} />
+
+        {/* Form analytics page */}
+        <Route path="/forms/:id/analytics" element={<Analytics />} />
+
+        {/* Public form share page */}
+        <Route path="/f/:id" element={<PublicForm />} />
       </Routes>
     </AnimatePresence>
   );
