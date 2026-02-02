@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { loadForm } from '../data/loadForm';
+
+const form = loadForm();
 
 /**
  * Interface for Results page props
@@ -44,22 +47,17 @@ const Results: React.FC<ResultsProps> = () => {
   };
 
   // Get result category based on score
-  const getResultCategory = () => {
-    if (score < 30) return 'Low Risk';
-    if (score < 60) return 'Medium Risk';
-    return 'High Risk';
+  const getResult = () => {
+    const match = form.results.find((result) => {
+      const meetsMin = result.minScore === undefined || score >= result.minScore;
+      const meetsMax = result.maxScore === undefined || score < result.maxScore;
+      return meetsMin && meetsMax;
+    });
+
+    return match ?? form.results[form.results.length - 1];
   };
 
-  // Get result description based on score
-  const getResultDescription = () => {
-    if (score < 30) {
-      return 'Your business appears to have a lower risk of AI disruption in the near term. However, staying informed about AI developments is still important.';
-    }
-    if (score < 60) {
-      return 'Your business shows moderate vulnerability to AI disruption. Consider exploring how AI might augment your work or create new opportunities.';
-    }
-    return 'Your business shows significant vulnerability to AI disruption. Get in touch with Stakwork to learn more about how we can help your business take advantage of AI.';
-  };
+  const result = getResult();
 
   // Animation variants
   const pageVariants = {
@@ -162,7 +160,7 @@ const Results: React.FC<ResultsProps> = () => {
               variants={itemVariants}
               className="text-3xl font-bold text-gray-800 mb-2 text-center"
             >
-              {getResultCategory()}
+              {result.label}
             </motion.h2>
             
             <motion.div 
@@ -170,14 +168,14 @@ const Results: React.FC<ResultsProps> = () => {
               className="flex items-center justify-center mb-6"
             >
               <div className="text-4xl font-bold text-primary">{score}</div>
-              <div className="text-gray-500 ml-2">/ 100</div>
+              <div className="text-gray-500 ml-2">/ {form.totalScore}</div>
             </motion.div>
             
             <motion.p 
               variants={itemVariants}
               className="text-gray-600 mb-8 text-center max-w-2xl"
             >
-              {getResultDescription()}
+              {result.description}
             </motion.p>
             
             <motion.form 

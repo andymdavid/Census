@@ -1,0 +1,97 @@
+{
+  "id": "ai-disruption",
+  "title": "AI Disruption Self-Assessment Tool",
+  "description": "This assessment will help you understand how AI might impact your business.",
+  "questions": [
+    {
+      "id": 1,
+      "text": "Do employee salaries and wages make up more than 50% of your business expenses?",
+      "weight": 10,
+      "category": "Labour"
+    },
+    {
+      "id": 2,
+      "text": "Do most of your employees use similar skills to complete their tasks?",
+      "weight": 7,
+      "category": "Labour"
+    },
+    {
+      "id": 3,
+      "text": "Are these tasks relatively simple and straightforward to complete?",
+      "weight": 7,
+      "category": "Labour"
+    },
+    {
+      "id": 4,
+      "text": "Can your business handle mistakes in these tasks without significant financial loss or customer impact?",
+      "weight": 6,
+      "category": "Labour"
+    },
+    {
+      "id": 5,
+      "text": "Do you have more than 4 employees focused on language-intensive tasks like writing, editing, translating, or managing audio/text communications?",
+      "weight": 8,
+      "category": "Language"
+    },
+    {
+      "id": 6,
+      "text": "Can new employees in these roles be fully trained in less than 1 month?",
+      "weight": 6,
+      "category": "Language"
+    },
+    {
+      "id": 7,
+      "text": "Are these employees paid more than $100,000PA?",
+      "weight": 9,
+      "category": "Language"
+    },
+    {
+      "id": 8,
+      "text": "Do these language-intensive tasks often follow predictable patterns or templates that could be easily replicated?",
+      "weight": 7,
+      "category": "Language"
+    },
+    {
+      "id": 9,
+      "text": "Does your business depend on defined processes that follow a specific sequence of steps?",
+      "weight": 14,
+      "category": "Load"
+    },
+    {
+      "id": 10,
+      "text": "Are these processes performed the same way each time?",
+      "weight": 10,
+      "category": "Load"
+    },
+    {
+      "id": 11,
+      "text": "Can these processes be documented as a standard set of steps?",
+      "weight": 10,
+      "category": "Load"
+    },
+    {
+      "id": 12,
+      "text": "Would your business remain competitive if these processes were automated?",
+      "weight": 6,
+      "category": "Load"
+    }
+  ],
+  "results": [
+    {
+      "label": "Low Risk",
+      "description": "Your business appears to have a lower risk of AI disruption in the near term. However, staying informed about AI developments is still important.",
+      "maxScore": 30
+    },
+    {
+      "label": "Medium Risk",
+      "description": "Your business shows moderate vulnerability to AI disruption. Consider exploring how AI might augment your work or create new opportunities.",
+      "minScore": 30,
+      "maxScore": 60
+    },
+    {
+      "label": "High Risk",
+      "description": "Your business shows significant vulnerability to AI disruption. Get in touch with Stakwork to learn more about how we can help your business take advantage of AI.",
+      "minScore": 60
+    }
+  ]
+}

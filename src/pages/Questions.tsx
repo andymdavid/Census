@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import questions from '../data/questions';
+import { loadForm } from '../data/loadForm';
+
+const form = loadForm();
+const questions = form.questions;
+const totalScore = form.totalScore;
 
 /**
  * Interface for Questions page props
@@ -20,7 +24,9 @@ const Questions: React.FC<QuestionsProps> = () => {
   // State to track current question index
   const [currentQuestion, setCurrentQuestion] = useState(0);
   // State to track user answers (yes/no)
-  const [answers, setAnswers] = useState<boolean[]>(Array(12).fill(false));
+  const [answers, setAnswers] = useState<boolean[]>(
+    () => Array(questions.length).fill(false)
+  );
   // State to track total score
   const [score, setScore] = useState(0);
   // State to track direction of transition (forward/backward)
@@ -234,7 +240,7 @@ const Questions: React.FC<QuestionsProps> = () => {
               variants={itemVariants}
               className="text-gray-400 text-sm mt-16 font-medium"
             >
-              Current score: {score} / 100
+              Current score: {score} / {totalScore}
             </motion.div>
           </motion.div>
         </motion.div>
