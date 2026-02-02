@@ -111,7 +111,18 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
 
     // Move to next question or results page
     if (nextId !== null && questionMap.has(nextId)) {
-      setHistory((prevHistory) => [...prevHistory, currentQuestionId]);
+      const nextHistory = [...history, currentQuestionId];
+      const visitedIds = new Set([...nextHistory, nextId]);
+      const trimmedAnswers: Record<number, boolean> = {};
+      for (const [key, value] of Object.entries(newAnswers)) {
+        const numericKey = Number(key);
+        if (visitedIds.has(numericKey)) {
+          trimmedAnswers[numericKey] = value;
+        }
+      }
+
+      setHistory(nextHistory);
+      setAnswers(trimmedAnswers);
       setCurrentQuestionId(nextId);
     } else {
       await submitResponse(newAnswers, updatedScore);
@@ -138,6 +149,7 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
   const question = questionMap.get(currentQuestionId) ?? questions[0];
   const currentIndexRaw = questions.findIndex((item) => item.id === question?.id);
   const currentIndex = currentIndexRaw === -1 ? 0 : currentIndexRaw;
+  const currentStep = history.length + 1;
   const score = computeScore(answers);
 
   // Animation variants for Framer Motion
@@ -217,7 +229,7 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
       {/* Main content area */}
       <AnimatePresence mode="wait" custom={direction}>
         <motion.div
-          key={currentQuestion}
+          key={currentQuestionId}
           custom={direction}
           variants={pageVariants}
           initial="initial"
@@ -227,7 +239,7 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
         >
           {/* Question counter - small and subtle */}
           <div className="text-sm text-gray-400 mb-8 text-center font-medium">
-            Question {currentIndex + 1} of {questions.length}
+            Step {currentStep} of {questions.length}
           </div>
 
           {/* Animated question content */}
