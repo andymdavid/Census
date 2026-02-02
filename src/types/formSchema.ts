@@ -1,8 +1,21 @@
+export interface FormBranchCondition {
+  when: {
+    answer: boolean;
+  };
+  next: number;
+}
+
+export interface FormBranching {
+  next?: number;
+  conditions?: FormBranchCondition[];
+}
+
 export interface FormQuestion {
   id: number;
   text: string;
   weight: number;
   category: string;
+  branching?: FormBranching;
 }
 
 export interface FormResultThreshold {
@@ -12,7 +25,8 @@ export interface FormResultThreshold {
   maxScore?: number;
 }
 
-export interface FormSchema {
+export interface FormSchemaV0 {
+  version: 'v0';
   id: string;
   title: string;
   description?: string;
@@ -20,6 +34,6 @@ export interface FormSchema {
   results: FormResultThreshold[];
 }
 
-export type LoadedFormSchema = FormSchema & {
+export type LoadedFormSchema = FormSchemaV0 & {
   totalScore: number;
 };

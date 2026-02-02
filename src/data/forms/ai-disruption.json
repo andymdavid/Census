@@ -1,4 +1,5 @@
 {
+  "version": "v0",
   "id": "ai-disruption",
   "title": "AI Disruption Self-Assessment Tool",
   "description": "This assessment will help you understand how AI might impact your business.",
@@ -7,67 +8,113 @@
       "id": 1,
       "text": "Do employee salaries and wages make up more than 50% of your business expenses?",
       "weight": 10,
-      "category": "Labour"
+      "category": "Labour",
+      "branching": {
+        "next": 2
+      }
     },
     {
       "id": 2,
       "text": "Do most of your employees use similar skills to complete their tasks?",
       "weight": 7,
-      "category": "Labour"
+      "category": "Labour",
+      "branching": {
+        "conditions": [
+          {
+            "when": {
+              "answer": true
+            },
+            "next": 3
+          },
+          {
+            "when": {
+              "answer": false
+            },
+            "next": 3
+          }
+        ]
+      }
     },
     {
       "id": 3,
       "text": "Are these tasks relatively simple and straightforward to complete?",
       "weight": 7,
-      "category": "Labour"
+      "category": "Labour",
+      "branching": {
+        "next": 4
+      }
     },
     {
       "id": 4,
       "text": "Can your business handle mistakes in these tasks without significant financial loss or customer impact?",
       "weight": 6,
-      "category": "Labour"
+      "category": "Labour",
+      "branching": {
+        "next": 5
+      }
     },
     {
       "id": 5,
       "text": "Do you have more than 4 employees focused on language-intensive tasks like writing, editing, translating, or managing audio/text communications?",
       "weight": 8,
-      "category": "Language"
+      "category": "Language",
+      "branching": {
+        "next": 6
+      }
     },
     {
       "id": 6,
       "text": "Can new employees in these roles be fully trained in less than 1 month?",
       "weight": 6,
-      "category": "Language"
+      "category": "Language",
+      "branching": {
+        "next": 7
+      }
     },
     {
       "id": 7,
       "text": "Are these employees paid more than $100,000PA?",
       "weight": 9,
-      "category": "Language"
+      "category": "Language",
+      "branching": {
+        "next": 8
+      }
     },
     {
       "id": 8,
       "text": "Do these language-intensive tasks often follow predictable patterns or templates that could be easily replicated?",
       "weight": 7,
-      "category": "Language"
+      "category": "Language",
+      "branching": {
+        "next": 9
+      }
     },
     {
       "id": 9,
       "text": "Does your business depend on defined processes that follow a specific sequence of steps?",
       "weight": 14,
-      "category": "Load"
+      "category": "Load",
+      "branching": {
+        "next": 10
+      }
     },
     {
       "id": 10,
       "text": "Are these processes performed the same way each time?",
       "weight": 10,
-      "category": "Load"
+      "category": "Load",
+      "branching": {
+        "next": 11
+      }
     },
     {
       "id": 11,
       "text": "Can these processes be documented as a standard set of steps?",
       "weight": 10,
-      "category": "Load"
+      "category": "Load",
+      "branching": {
+        "next": 12
+      }
     },
     {
       "id": 12,
