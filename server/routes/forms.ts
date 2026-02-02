@@ -1,5 +1,6 @@
 import {
   createForm,
+  formExists,
   getFormById,
   listForms,
   publishFormById,
@@ -43,6 +44,29 @@ export const handleFormsRoutes = async (request: Request) => {
     return jsonResponse({ id: created.id });
   }
 
+  const publicMatch = path.match(/^\/api\/forms\/([^/]+)\/public$/);
+  if (publicMatch && request.method === 'GET') {
+    const formId = publicMatch[1];
+    const form = getFormById(formId);
+    if (!form || form.published !== 1) {
+      return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+    }
+
+    let schema: unknown = {};
+    try {
+      schema = JSON.parse(form.schema_json);
+    } catch {
+      schema = {};
+    }
+
+    return jsonResponse({
+      id: form.id,
+      title: form.title,
+      schema,
+      published: form.published,
+    });
+  }
+
   const formIdMatch = path.match(/^\/api\/forms\/([^/]+)$/);
   if (formIdMatch) {
     const formId = formIdMatch[1];
@@ -71,6 +95,10 @@ export const handleFormsRoutes = async (request: Request) => {
     }
 
     if (request.method === 'PUT') {
+      if (!formExists(formId)) {
+        return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+      }
+
       const payload = await readJson<{ title?: string; schema?: unknown }>(request);
       const title = payload?.title?.trim();
       if (!title) {
@@ -85,6 +113,9 @@ export const handleFormsRoutes = async (request: Request) => {
   const publishMatch = path.match(/^\/api\/forms\/([^/]+)\/publish$/);
   if (publishMatch && request.method === 'POST') {
     const formId = publishMatch[1];
+    if (!formExists(formId)) {
+      return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+    }
     publishFormById(formId);
     return jsonResponse({ ok: true });
   }

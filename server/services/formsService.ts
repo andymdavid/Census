@@ -18,6 +18,7 @@ const selectForms = db.prepare(
 const selectFormById = db.prepare(
   'SELECT id, title, schema_json, created_at, updated_at, published FROM forms WHERE id = ?'
 );
+const selectFormExists = db.prepare('SELECT 1 as exists_flag FROM forms WHERE id = ? LIMIT 1');
 const updateForm = db.prepare(
   'UPDATE forms SET title = ?, schema_json = ?, updated_at = ? WHERE id = ?'
 );
@@ -34,6 +35,11 @@ export const listForms = () => {
 export const getFormById = (id: string) => {
   const row = selectFormById.get(id) as FormRecord | undefined;
   return row ?? null;
+};
+
+export const formExists = (id: string) => {
+  const row = selectFormExists.get(id) as { exists_flag: number } | undefined;
+  return Boolean(row?.exists_flag);
 };
 
 export const createForm = (input: { title: string; schema: unknown }) => {

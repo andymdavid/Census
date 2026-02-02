@@ -10,6 +10,7 @@ const Builder: React.FC = () => {
   const [schemaText, setSchemaText] = useState('');
   const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [published, setPublished] = useState(false);
 
   const parsedSchema = useMemo(() => {
     try {
@@ -32,10 +33,11 @@ const Builder: React.FC = () => {
         if (!response.ok) {
           throw new Error('Failed to load form.');
         }
-        const data = (await response.json()) as { title?: string; schema?: unknown };
+        const data = (await response.json()) as { title?: string; schema?: unknown; published?: number };
         if (isMounted) {
           setTitle(data.title ?? '');
           setSchemaText(JSON.stringify(data.schema ?? {}, null, 2));
+          setPublished(data.published === 1);
         }
       } catch (err) {
         if (isMounted) {
@@ -118,6 +120,26 @@ const Builder: React.FC = () => {
     }
   };
 
+  const handlePublish = async () => {
+    if (!id || isNew) return;
+    setStatus('saving');
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/forms/${id}/publish`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to publish form.');
+      }
+      setPublished(true);
+      setStatus('success');
+    } catch (err) {
+      setStatus('error');
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    }
+  };
+
   return (
     <div className="typeform-fullscreen">
       <div className="typeform-content">
@@ -128,6 +150,19 @@ const Builder: React.FC = () => {
           </h2>
 
           <div className="w-full max-w-3xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="text-sm text-gray-500">
+                Status: {published ? 'Published' : 'Draft'}
+              </div>
+              <button
+                type="button"
+                onClick={handlePublish}
+                className="text-sm font-medium text-primary hover:text-primary/80 disabled:text-gray-400"
+                disabled={isNew || published || status === 'saving'}
+              >
+                {published ? 'Published' : 'Publish'}
+              </button>
+            </div>
             <div className="mb-6">
               <label htmlFor="title" className="block text-sm font-medium text-gray-600 mb-2">
                 Title

@@ -12,9 +12,13 @@ export const loadForm = (): LoadedFormSchema => {
   };
 };
 
-export const loadFormFromApi = async (id: string): Promise<FormSchemaV0 | null> => {
+export const loadFormFromApi = async (
+  id: string,
+  options?: { publicOnly?: boolean }
+): Promise<FormSchemaV0 | null> => {
   try {
-    const response = await fetch(`/api/forms/${id}`);
+    const path = options?.publicOnly ? `/api/forms/${id}/public` : `/api/forms/${id}`;
+    const response = await fetch(path);
     if (!response.ok) {
       return null;
     }
@@ -25,8 +29,11 @@ export const loadFormFromApi = async (id: string): Promise<FormSchemaV0 | null> 
   }
 };
 
-export const loadFormWithFallback = async (id: string): Promise<LoadedFormSchema> => {
-  const apiForm = await loadFormFromApi(id);
+export const loadFormWithFallback = async (
+  id: string,
+  publicOnly = false
+): Promise<LoadedFormSchema> => {
+  const apiForm = await loadFormFromApi(id, { publicOnly });
   if (apiForm) {
     const totalScore = apiForm.questions.reduce((sum, question) => sum + question.weight, 0);
     return { ...apiForm, totalScore };

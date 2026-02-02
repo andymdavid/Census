@@ -18,7 +18,7 @@ const PublicForm: React.FC = () => {
         return;
       }
 
-      const loaded = await loadFormWithFallback(id);
+      const loaded = await loadFormWithFallback(id, true);
       if (isMounted) {
         setForm(loaded);
       }

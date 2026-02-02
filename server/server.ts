@@ -4,6 +4,7 @@ import { handleFormsRoutes } from './routes/forms';
 import { handleResponsesRoutes } from './routes/responses';
 
 const publicDir = `${process.cwd()}/public`;
+const buildDir = `${process.cwd()}/build`;
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
   return new Response(JSON.stringify(data), {
@@ -43,14 +44,24 @@ const handler = async (request: Request, server: Server) => {
   }
 
   const path = url.pathname === '/' ? '/index.html' : url.pathname;
-  const file = Bun.file(`${publicDir}${path}`);
-  if (await file.exists()) {
-    return new Response(file);
+  const buildFile = Bun.file(`${buildDir}${path}`);
+  if (await buildFile.exists()) {
+    return new Response(buildFile);
   }
 
-  const fallback = Bun.file(`${publicDir}/index.html`);
-  if (await fallback.exists()) {
-    return new Response(fallback);
+  const publicFile = Bun.file(`${publicDir}${path}`);
+  if (await publicFile.exists()) {
+    return new Response(publicFile);
+  }
+
+  const buildFallback = Bun.file(`${buildDir}/index.html`);
+  if (await buildFallback.exists()) {
+    return new Response(buildFallback);
+  }
+
+  const publicFallback = Bun.file(`${publicDir}/index.html`);
+  if (await publicFallback.exists()) {
+    return new Response(publicFallback);
   }
 
   return jsonResponse({ error: 'Not found' }, { status: 404 });

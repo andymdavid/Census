@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { loadForm } from '../data/loadForm';
@@ -23,26 +23,65 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
   const form = formOverride ?? loadForm();
   const questions = form.questions;
   const totalScore = form.totalScore;
+  const questionMap = useMemo(
+    () => new Map(questions.map((question) => [question.id, question])),
+    [questions]
+  );
 
   // State to track current question index
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  // State to track user answers (yes/no)
-  const [answers, setAnswers] = useState<boolean[]>(
-    () => Array(questions.length).fill(false)
+  const [currentQuestionId, setCurrentQuestionId] = useState(
+    questions[0]?.id ?? 0
   );
-  // State to track total score
-  const [score, setScore] = useState(0);
+  // State to track user answers (yes/no)
+  const [answers, setAnswers] = useState<Record<number, boolean>>({});
+  // State to track history for branching
+  const [history, setHistory] = useState<number[]>([]);
   // State to track direction of transition (forward/backward)
   const [direction, setDirection] = useState(1); // 1 for forward, -1 for backward
 
   // Handle answer selection
-  const submitResponse = async (answersSnapshot: boolean[], finalScore: number) => {
+  const computeScore = (answersSnapshot: Record<number, boolean>) => {
+    return questions.reduce((sum, question) => {
+      return answersSnapshot[question.id] ? sum + question.weight : sum;
+    }, 0);
+  };
+
+  const getSequentialNextId = (questionId: number) => {
+    const index = questions.findIndex((question) => question.id === questionId);
+    if (index === -1) return null;
+    return questions[index + 1]?.id ?? null;
+  };
+
+  const getNextQuestionId = (questionId: number, answer: boolean) => {
+    const question = questionMap.get(questionId);
+    if (!question?.branching) {
+      return getSequentialNextId(questionId);
+    }
+
+    const conditions = question.branching.conditions;
+    if (conditions && conditions.length > 0) {
+      const matched = conditions.find((condition) => condition.when.answer === answer);
+      if (matched) return matched.next;
+    }
+
+    if (question.branching.next !== undefined) {
+      return question.branching.next;
+    }
+
+    return getSequentialNextId(questionId);
+  };
+
+  const submitResponse = async (
+    answersSnapshot: Record<number, boolean>,
+    finalScore: number
+  ) => {
     if (!formId) return;
 
+    const visitedIds = [...history, currentQuestionId];
     const payload = {
-      answers: questions.map((question, index) => ({
-        questionId: String(question.id),
-        answer: answersSnapshot[index] ? 'yes' : 'no',
+      answers: visitedIds.map((questionId) => ({
+        questionId: String(questionId),
+        answer: answersSnapshot[questionId] ? 'yes' : 'no',
       })),
       score: finalScore,
     };
@@ -61,23 +100,19 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
   };
 
   const handleAnswer = async (answer: boolean) => {
-    const newAnswers = [...answers];
-    newAnswers[currentQuestion] = answer;
+    const newAnswers = { ...answers, [currentQuestionId]: answer };
     setAnswers(newAnswers);
-
-    // Update score if answer is yes
-    let updatedScore = score;
-    if (answer) {
-      updatedScore = score + questions[currentQuestion].weight;
-      setScore(updatedScore);
-    }
+    const updatedScore = computeScore(newAnswers);
 
     // Set direction to forward
     setDirection(1);
 
+    const nextId = getNextQuestionId(currentQuestionId, answer);
+
     // Move to next question or results page
-    if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(prevQuestion => prevQuestion + 1);
+    if (nextId !== null && questionMap.has(nextId)) {
+      setHistory((prevHistory) => [...prevHistory, currentQuestionId]);
+      setCurrentQuestionId(nextId);
     } else {
       await submitResponse(newAnswers, updatedScore);
       // Navigate to results page with the final score
@@ -88,27 +123,22 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
 
   // Handle going back to previous question
   const handlePrevious = () => {
-    if (currentQuestion > 0) {
+    if (history.length > 0) {
       // Set direction to backward
       setDirection(-1);
-      
-      // If the previous answer was yes, subtract its weight from the score
-      if (answers[currentQuestion - 1]) {
-        setScore(prevScore => prevScore - questions[currentQuestion - 1].weight);
-      }
-      
-      // Update answers array
-      const newAnswers = [...answers];
-      newAnswers[currentQuestion - 1] = false;
-      setAnswers(newAnswers);
-      
+
+      const previousId = history[history.length - 1];
+      setHistory((prevHistory) => prevHistory.slice(0, -1));
+
       // Go to previous question
-      setCurrentQuestion(prevQuestion => prevQuestion - 1);
+      setCurrentQuestionId(previousId);
     }
   };
 
-  // Current question
-  const question = questions[currentQuestion];
+  const question = questionMap.get(currentQuestionId) ?? questions[0];
+  const currentIndexRaw = questions.findIndex((item) => item.id === question?.id);
+  const currentIndex = currentIndexRaw === -1 ? 0 : currentIndexRaw;
+  const score = computeScore(answers);
 
   // Animation variants for Framer Motion
   const pageVariants = {
@@ -179,7 +209,7 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
         <div className="typeform-thin-progress">
           <div 
             className="typeform-thin-progress-fill" 
-            style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
+            style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
           ></div>
         </div>
       </div>
@@ -197,7 +227,7 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
         >
           {/* Question counter - small and subtle */}
           <div className="text-sm text-gray-400 mb-8 text-center font-medium">
-            Question {currentQuestion + 1} of {questions.length}
+            Question {currentIndex + 1} of {questions.length}
           </div>
 
           {/* Animated question content */}
@@ -250,7 +280,7 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
             </motion.div>
 
             {/* Back button - only show if not on first question */}
-            {currentQuestion > 0 && (
+            {history.length > 0 && (
               <motion.button
                 variants={itemVariants}
                 onClick={handlePrevious}

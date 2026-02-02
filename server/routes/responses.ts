@@ -1,3 +1,4 @@
+import { formExists } from '../services/formsService';
 import { createResponse, exportResponses, getSummary, listResponses } from '../services/responsesService';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
@@ -34,12 +35,18 @@ export const handleResponsesRoutes = async (request: Request) => {
   const summaryMatch = path.match(/^\/api\/forms\/([^/]+)\/responses\/summary$/);
   if (summaryMatch && request.method === 'GET') {
     const formId = summaryMatch[1];
+    if (!formExists(formId)) {
+      return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+    }
     return jsonResponse(getSummary(formId));
   }
 
   const exportMatch = path.match(/^\/api\/forms\/([^/]+)\/responses\/export$/);
   if (exportMatch && request.method === 'GET') {
     const formId = exportMatch[1];
+    if (!formExists(formId)) {
+      return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+    }
     const rows = exportResponses(formId);
 
     const header = [
@@ -79,6 +86,9 @@ export const handleResponsesRoutes = async (request: Request) => {
   const responsesMatch = path.match(/^\/api\/forms\/([^/]+)\/responses$/);
   if (responsesMatch) {
     const formId = responsesMatch[1];
+    if (!formExists(formId)) {
+      return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+    }
 
     if (request.method === 'POST') {
       const payload = await readJson<{
