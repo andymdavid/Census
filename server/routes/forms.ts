@@ -6,6 +6,7 @@ import {
   publishFormById,
   updateFormById,
 } from '../services/formsService';
+import { getSessionFromRequest } from '../services/sessionService';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
   return new Response(JSON.stringify(data), {
@@ -28,6 +29,14 @@ const readJson = async <T>(request: Request): Promise<T | null> => {
 export const handleFormsRoutes = async (request: Request) => {
   const url = new URL(request.url);
   const path = url.pathname;
+  const isPublicPath = /\\/public$/.test(path);
+
+  if (!isPublicPath) {
+    const session = getSessionFromRequest(request);
+    if (!session) {
+      return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
 
   if (request.method === 'GET' && path === '/api/forms') {
     return jsonResponse({ forms: listForms() });

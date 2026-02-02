@@ -12,6 +12,7 @@ import Forms from './pages/Forms';
 import Builder from './pages/Builder';
 import Analytics from './pages/Analytics';
 import PublicForm from './pages/PublicForm';
+import AuthGate from './components/AuthGate';
 
 /**
  * AnimatedRoutes component
@@ -36,13 +37,34 @@ const AnimatedRoutes = () => {
         <Route path="/thank-you" element={<ThankYou />} />
 
         {/* Forms list page */}
-        <Route path="/forms" element={<Forms />} />
+        <Route
+          path="/forms"
+          element={
+            <AuthGate>
+              <Forms />
+            </AuthGate>
+          }
+        />
 
         {/* Form builder page */}
-        <Route path="/forms/:id/edit" element={<Builder />} />
+        <Route
+          path="/forms/:id/edit"
+          element={
+            <AuthGate>
+              <Builder />
+            </AuthGate>
+          }
+        />
 
         {/* Form analytics page */}
-        <Route path="/forms/:id/analytics" element={<Analytics />} />
+        <Route
+          path="/forms/:id/analytics"
+          element={
+            <AuthGate>
+              <Analytics />
+            </AuthGate>
+          }
+        />
 
         {/* Public form share page */}
         <Route path="/f/:id" element={<PublicForm />} />

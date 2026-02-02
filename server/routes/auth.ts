@@ -1,10 +1,19 @@
 import {
   buildSessionClearCookie,
   buildSessionCookie,
-  createSession,
   clearSession,
+  createSession,
   getCookie,
+  getSessionFromRequest,
 } from '../services/sessionService';
+import {
+  consumeNonce,
+  createNonce,
+  extractChallenge,
+  isNonceValid,
+  isValidAuthEvent,
+  NostrAuthEvent,
+} from '../services/authService';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
   return new Response(JSON.stringify(data), {
@@ -25,14 +34,29 @@ const readJson = async <T>(request: Request): Promise<T | null> => {
 };
 
 export const handleNonce = async () => {
-  const challenge = crypto.randomUUID();
-  return jsonResponse({ challenge });
+  const nonce = createNonce();
+  return jsonResponse({ challenge: nonce.challenge, expiresAt: nonce.expiresAt });
 };
 
 export const handleVerify = async (request: Request) => {
-  const payload = await readJson<{ pubkey?: string; signedEvent?: unknown }>(request);
-  const pubkey = payload?.pubkey ?? null;
-  const session = createSession(pubkey);
+  const payload = await readJson<{ event?: NostrAuthEvent }>(request);
+  const event = payload?.event;
+  if (!event) {
+    return jsonResponse({ error: 'Missing event.' }, { status: 400 });
+  }
+
+  const challenge = extractChallenge(event);
+  if (!challenge || !isNonceValid(challenge)) {
+    return jsonResponse({ error: 'Invalid challenge.' }, { status: 400 });
+  }
+
+  if (!isValidAuthEvent(event, challenge)) {
+    return jsonResponse({ error: 'Invalid event.' }, { status: 400 });
+  }
+
+  consumeNonce(challenge);
+
+  const session = createSession(event.pubkey ?? null);
 
   return jsonResponse(
     {
@@ -68,6 +92,14 @@ export const handleLogout = async (request: Request) => {
 
 export const handleAuthRoutes = async (request: Request) => {
   const url = new URL(request.url);
+
+  if (request.method === 'GET' && url.pathname === '/api/auth/me') {
+    const session = getSessionFromRequest(request);
+    if (!session) {
+      return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return jsonResponse({ pubkey: session.pubkey });
+  }
 
   if (request.method === 'POST' && url.pathname === '/api/auth/nonce') {
     return handleNonce();

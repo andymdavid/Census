@@ -42,6 +42,18 @@ export const getSession = (id: string) => {
   return row;
 };
 
+export const getSessionFromRequest = (request: Request) => {
+  const sessionId = getCookie(request, 'session_id');
+  if (!sessionId) return null;
+  const session = getSession(sessionId);
+  if (!session) return null;
+  if (session.expires_at < Date.now()) {
+    clearSession(sessionId);
+    return null;
+  }
+  return session;
+};
+
 export const buildSessionCookie = (sessionId: string, ttlSeconds: number) => {
   return `session_id=${sessionId}; Max-Age=${ttlSeconds}; Path=/; HttpOnly; SameSite=Lax`;
 };

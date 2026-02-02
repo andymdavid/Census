@@ -1,5 +1,6 @@
 import { formExists } from '../services/formsService';
 import { createResponse, exportResponses, getSummary, listResponses } from '../services/responsesService';
+import { getSessionFromRequest } from '../services/sessionService';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
   return new Response(JSON.stringify(data), {
@@ -35,6 +36,10 @@ export const handleResponsesRoutes = async (request: Request) => {
   const summaryMatch = path.match(/^\/api\/forms\/([^/]+)\/responses\/summary$/);
   if (summaryMatch && request.method === 'GET') {
     const formId = summaryMatch[1];
+    const session = getSessionFromRequest(request);
+    if (!session) {
+      return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
+    }
     if (!formExists(formId)) {
       return jsonResponse({ error: 'Form not found.' }, { status: 404 });
     }
@@ -44,6 +49,10 @@ export const handleResponsesRoutes = async (request: Request) => {
   const exportMatch = path.match(/^\/api\/forms\/([^/]+)\/responses\/export$/);
   if (exportMatch && request.method === 'GET') {
     const formId = exportMatch[1];
+    const session = getSessionFromRequest(request);
+    if (!session) {
+      return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
+    }
     if (!formExists(formId)) {
       return jsonResponse({ error: 'Form not found.' }, { status: 404 });
     }
@@ -112,6 +121,10 @@ export const handleResponsesRoutes = async (request: Request) => {
     }
 
     if (request.method === 'GET') {
+      const session = getSessionFromRequest(request);
+      if (!session) {
+        return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
+      }
       const data = listResponses(formId);
       return jsonResponse(data);
     }
