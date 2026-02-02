@@ -8,6 +8,8 @@ import Welcome from './pages/Welcome';
 import Questions from './pages/Questions';
 import Results from './pages/Results';
 import ThankYou from './pages/ThankYou';
+import Forms from './pages/Forms';
+import Builder from './pages/Builder';
 
 /**
  * AnimatedRoutes component
@@ -30,6 +32,12 @@ const AnimatedRoutes = () => {
         
         {/* Thank You page - Final page after submission */}
         <Route path="/thank-you" element={<ThankYou />} />
+
+        {/* Forms list page */}
+        <Route path="/forms" element={<Forms />} />
+
+        {/* Form builder page */}
+        <Route path="/forms/:id/edit" element={<Builder />} />
       </Routes>
     </AnimatePresence>
   );

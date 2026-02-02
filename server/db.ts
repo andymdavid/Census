@@ -11,4 +11,15 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS forms (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    schema_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    published INTEGER NOT NULL DEFAULT 0
+  );
+`);
+
 export default db;
