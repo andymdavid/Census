@@ -140,6 +140,7 @@ export const getFunnelStats = (formId: string) => {
     created_at: number;
   }>;
 
+  // TODO: Completion logic uses max question_id; replace with schema terminal-node detection.
   const maxRow = maxQuestionId.get(formId) as { max_question_id: number | null } | undefined;
   const maxId = maxRow?.max_question_id ?? 0;
 
