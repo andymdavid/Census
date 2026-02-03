@@ -1,5 +1,11 @@
 import { formExists } from '../services/formsService';
-import { createResponse, exportResponses, getSummary, listResponses } from '../services/responsesService';
+import {
+  createResponse,
+  exportResponses,
+  getFunnelStats,
+  getSummary,
+  listResponses,
+} from '../services/responsesService';
 import { getSessionFromRequest } from '../services/sessionService';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
@@ -44,6 +50,19 @@ export const handleResponsesRoutes = async (request: Request) => {
       return jsonResponse({ error: 'Form not found.' }, { status: 404 });
     }
     return jsonResponse(getSummary(formId));
+  }
+
+  const funnelMatch = path.match(/^\/api\/forms\/([^/]+)\/responses\/funnel$/);
+  if (funnelMatch && request.method === 'GET') {
+    const formId = funnelMatch[1];
+    const session = getSessionFromRequest(request);
+    if (!session) {
+      return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!formExists(formId)) {
+      return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+    }
+    return jsonResponse(getFunnelStats(formId));
   }
 
   const exportMatch = path.match(/^\/api\/forms\/([^/]+)\/responses\/export$/);

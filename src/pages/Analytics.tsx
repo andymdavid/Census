@@ -14,9 +14,16 @@ interface SummaryResponse {
   questionStats: Array<{ question_id: string; answer: string; count: number }>;
 }
 
+interface FunnelResponse {
+  totalStarts: number;
+  completions: number;
+  dropOffByQuestionId: Record<string, number>;
+}
+
 const Analytics: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
+  const [funnel, setFunnel] = useState<FunnelResponse | null>(null);
   const [responses, setResponses] = useState<ResponseItem[]>([]);
   const [count, setCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -33,12 +40,13 @@ const Analytics: React.FC = () => {
       }
 
       try {
-        const [summaryResponse, listResponse] = await Promise.all([
+        const [summaryResponse, listResponse, funnelResponse] = await Promise.all([
           fetch(`/api/forms/${id}/responses/summary`),
           fetch(`/api/forms/${id}/responses`),
+          fetch(`/api/forms/${id}/responses/funnel`),
         ]);
 
-        if (!summaryResponse.ok || !listResponse.ok) {
+        if (!summaryResponse.ok || !listResponse.ok || !funnelResponse.ok) {
           throw new Error('Failed to load analytics.');
         }
 
@@ -47,11 +55,13 @@ const Analytics: React.FC = () => {
           responses?: ResponseItem[];
           count?: number;
         };
+        const funnelData = (await funnelResponse.json()) as FunnelResponse;
 
         if (isMounted) {
           setSummary(summaryData);
           setResponses(listData.responses ?? []);
           setCount(listData.count ?? 0);
+          setFunnel(funnelData);
         }
       } catch (err) {
         if (isMounted) {
@@ -114,6 +124,43 @@ const Analytics: React.FC = () => {
                   <div className="text-2xl font-bold text-gray-800">{responses.length}</div>
                 </div>
               </div>
+
+              {funnel && (
+                <div>
+                  <div className="text-sm text-gray-500 mb-2">Funnel</div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="border border-gray-200 rounded-md p-4">
+                      <div className="text-sm text-gray-500">Total starts</div>
+                      <div className="text-2xl font-bold text-gray-800">{funnel.totalStarts}</div>
+                    </div>
+                    <div className="border border-gray-200 rounded-md p-4">
+                      <div className="text-sm text-gray-500">Completions</div>
+                      <div className="text-2xl font-bold text-gray-800">{funnel.completions}</div>
+                    </div>
+                    <div className="border border-gray-200 rounded-md p-4">
+                      <div className="text-sm text-gray-500">Completion rate</div>
+                      <div className="text-2xl font-bold text-gray-800">
+                        {funnel.totalStarts > 0
+                          ? `${Math.round((funnel.completions / funnel.totalStarts) * 100)}%`
+                          : '0%'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="border border-gray-200 rounded-md p-4">
+                    <div className="text-sm text-gray-500 mb-2">Drop-off by question</div>
+                    {Object.keys(funnel.dropOffByQuestionId).length === 0 && (
+                      <div className="text-gray-500">No data yet.</div>
+                    )}
+                    {Object.entries(funnel.dropOffByQuestionId)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([questionId, value]) => (
+                        <div key={questionId} className="text-sm text-gray-700">
+                          Q{questionId}: {value}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div className="text-sm text-gray-500 mb-2">Per-question stats</div>

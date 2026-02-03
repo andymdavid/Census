@@ -40,6 +40,27 @@ const questionStats = db.prepare(
   GROUP BY a.question_id, a.answer
   `
 );
+const funnelLastAnswer = db.prepare(
+  `
+  SELECT a.response_id as response_id, a.question_id as question_id, a.created_at as created_at
+  FROM answers a
+  INNER JOIN responses r ON r.id = a.response_id
+  INNER JOIN (
+    SELECT response_id, MAX(created_at) as max_created_at
+    FROM answers
+    GROUP BY response_id
+  ) m ON a.response_id = m.response_id AND a.created_at = m.max_created_at
+  WHERE r.form_id = ?
+  `
+);
+const maxQuestionId = db.prepare(
+  `
+  SELECT MAX(CAST(a.question_id AS INTEGER)) as max_question_id
+  FROM answers a
+  INNER JOIN responses r ON r.id = a.response_id
+  WHERE r.form_id = ?
+  `
+);
 const exportRows = db.prepare(
   `
   SELECT r.id as response_id, r.created_at as response_created_at, r.score as score, r.meta_json as meta_json,
@@ -107,4 +128,31 @@ export const exportResponses = (formId: string) => {
     answer: string | null;
     answer_created_at: number | null;
   }>;
+};
+
+export const getFunnelStats = (formId: string) => {
+  const countRow = countResponses.get(formId) as { count: number } | undefined;
+  const totalStarts = countRow?.count ?? 0;
+
+  const rows = funnelLastAnswer.all(formId) as Array<{
+    response_id: string;
+    question_id: string;
+    created_at: number;
+  }>;
+
+  const maxRow = maxQuestionId.get(formId) as { max_question_id: number | null } | undefined;
+  const maxId = maxRow?.max_question_id ?? 0;
+
+  const dropOffByQuestionId: Record<string, number> = {};
+  let completions = 0;
+
+  for (const row of rows) {
+    dropOffByQuestionId[row.question_id] = (dropOffByQuestionId[row.question_id] ?? 0) + 1;
+    const numericId = Number(row.question_id);
+    if (maxId > 0 && numericId === maxId) {
+      completions += 1;
+    }
+  }
+
+  return { totalStarts, completions, dropOffByQuestionId };
 };
