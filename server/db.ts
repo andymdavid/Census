@@ -50,4 +50,16 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS leads (
+    id TEXT PRIMARY KEY,
+    form_id TEXT NOT NULL,
+    response_id TEXT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    company TEXT,
+    created_at INTEGER NOT NULL
+  );
+`);
+
 export default db;

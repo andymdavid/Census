@@ -20,12 +20,22 @@ interface FunnelResponse {
   dropOffByQuestionId: Record<string, number>;
 }
 
+interface LeadItem {
+  id: string;
+  name: string;
+  email: string;
+  company: string | null;
+  created_at: number;
+  response_id: string | null;
+}
+
 const Analytics: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [funnel, setFunnel] = useState<FunnelResponse | null>(null);
   const [responses, setResponses] = useState<ResponseItem[]>([]);
   const [count, setCount] = useState(0);
+  const [leads, setLeads] = useState<LeadItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -40,13 +50,19 @@ const Analytics: React.FC = () => {
       }
 
       try {
-        const [summaryResponse, listResponse, funnelResponse] = await Promise.all([
+        const [summaryResponse, listResponse, funnelResponse, leadsResponse] = await Promise.all([
           fetch(`/api/forms/${id}/responses/summary`),
           fetch(`/api/forms/${id}/responses`),
           fetch(`/api/forms/${id}/responses/funnel`),
+          fetch(`/api/forms/${id}/leads`),
         ]);
 
-        if (!summaryResponse.ok || !listResponse.ok || !funnelResponse.ok) {
+        if (
+          !summaryResponse.ok ||
+          !listResponse.ok ||
+          !funnelResponse.ok ||
+          !leadsResponse.ok
+        ) {
           throw new Error('Failed to load analytics.');
         }
 
@@ -56,12 +72,14 @@ const Analytics: React.FC = () => {
           count?: number;
         };
         const funnelData = (await funnelResponse.json()) as FunnelResponse;
+        const leadData = (await leadsResponse.json()) as { leads?: LeadItem[] };
 
         if (isMounted) {
           setSummary(summaryData);
           setResponses(listData.responses ?? []);
           setCount(listData.count ?? 0);
           setFunnel(funnelData);
+          setLeads(leadData.leads ?? []);
         }
       } catch (err) {
         if (isMounted) {
@@ -171,6 +189,23 @@ const Analytics: React.FC = () => {
                   {summary.questionStats.map((stat) => (
                     <div key={`${stat.question_id}-${stat.answer}`} className="text-sm text-gray-700">
                       Q{stat.question_id} · {stat.answer}: {stat.count}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-sm text-gray-500 mb-2">Leads</div>
+                <div className="border border-gray-200 rounded-md p-4 space-y-2">
+                  {leads.length === 0 && <div className="text-gray-500">No leads yet.</div>}
+                  {leads.map((lead) => (
+                    <div key={lead.id} className="text-sm text-gray-700">
+                      <div className="font-medium text-gray-800">
+                        {lead.name} {lead.company ? `· ${lead.company}` : ''}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {lead.email} · {new Date(lead.created_at).toLocaleString()}
+                      </div>
                     </div>
                   ))}
                 </div>

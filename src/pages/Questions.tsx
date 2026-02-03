@@ -96,16 +96,20 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
     };
 
     try {
-      await fetch(`/api/forms/${formId}/responses`, {
+      const response = await fetch(`/api/forms/${formId}/responses`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
       });
+      if (!response.ok) return null;
+      const data = (await response.json()) as { id?: string };
+      return data.id ?? null;
     } catch {
       // Ignore submission errors for now.
     }
+    return null;
   };
 
   const handleAnswer = async (answer: boolean) => {
@@ -134,10 +138,10 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
       setAnswers(trimmedAnswers);
       setCurrentQuestionId(nextId);
     } else {
-      await submitResponse(newAnswers, updatedScore);
+      const responseId = await submitResponse(newAnswers, updatedScore);
       // Navigate to results page with the final score
       // Use the updated score directly to ensure the last question's score is included
-      navigate('/results', { state: { score: updatedScore, form } });
+      navigate('/results', { state: { score: updatedScore, form, formId, responseId } });
     }
   };
 

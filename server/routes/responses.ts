@@ -85,6 +85,9 @@ export const handleResponsesRoutes = async (request: Request) => {
       'question_id',
       'answer',
       'answer_created_at',
+      'lead_name',
+      'lead_email',
+      'lead_company',
     ];
 
     const body = rows.map((row) =>
@@ -96,6 +99,9 @@ export const handleResponsesRoutes = async (request: Request) => {
         row.question_id,
         row.answer,
         row.answer_created_at,
+        row.lead_name,
+        row.lead_email,
+        row.lead_company,
       ]
         .map(toCsvValue)
         .join(',')

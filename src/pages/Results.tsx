@@ -21,6 +21,8 @@ const Results: React.FC<ResultsProps> = () => {
   const navigate = useNavigate();
   const score = location.state?.score || 0;
   const form = (location.state?.form as LoadedFormSchema | undefined) ?? defaultForm;
+  const formId = location.state?.formId as string | undefined;
+  const responseId = location.state?.responseId as string | undefined;
   const logoUrl = form.theme?.logoUrl;
   const themeStyles = form.theme
     ? ({
@@ -45,6 +47,23 @@ const Results: React.FC<ResultsProps> = () => {
     // In a real app, you would send this data to a server
     console.log({ name, email, company, score });
     setSubmitted(true);
+
+    if (formId) {
+      fetch(`/api/forms/${formId}/leads`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          company,
+          responseId,
+        }),
+      }).catch(() => {
+        // ignore lead submission errors
+      });
+    }
     
     // Delay navigation to allow transition animation
     setTimeout(() => {

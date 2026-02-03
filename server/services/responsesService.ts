@@ -64,9 +64,11 @@ const maxQuestionId = db.prepare(
 const exportRows = db.prepare(
   `
   SELECT r.id as response_id, r.created_at as response_created_at, r.score as score, r.meta_json as meta_json,
-         a.question_id as question_id, a.answer as answer, a.created_at as answer_created_at
+         a.question_id as question_id, a.answer as answer, a.created_at as answer_created_at,
+         l.name as lead_name, l.email as lead_email, l.company as lead_company
   FROM responses r
   LEFT JOIN answers a ON a.response_id = r.id
+  LEFT JOIN leads l ON l.response_id = r.id
   WHERE r.form_id = ?
   ORDER BY r.created_at DESC
   `
@@ -127,6 +129,9 @@ export const exportResponses = (formId: string) => {
     question_id: string | null;
     answer: string | null;
     answer_created_at: number | null;
+    lead_name: string | null;
+    lead_email: string | null;
+    lead_company: string | null;
   }>;
 };
 
