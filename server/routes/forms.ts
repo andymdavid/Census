@@ -29,7 +29,7 @@ const readJson = async <T>(request: Request): Promise<T | null> => {
 export const handleFormsRoutes = async (request: Request) => {
   const url = new URL(request.url);
   const path = url.pathname;
-  const isPublicPath = /\\/public$/.test(path);
+  const isPublicPath = /\/public$/.test(path);
 
   if (!isPublicPath) {
     const session = getSessionFromRequest(request);

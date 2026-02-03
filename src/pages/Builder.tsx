@@ -222,8 +222,8 @@ const Builder: React.FC = () => {
   };
 
   return (
-    <div className="typeform-fullscreen">
-      <div className="typeform-content">
+    <div className="typeform-fullscreen typeform-fullscreen-scroll">
+      <div className="typeform-content typeform-content-scroll">
         <div className="flex flex-col items-center w-full">
           <div className="text-sm text-gray-400 mb-4 font-medium">Builder</div>
           <h2 className="text-3xl font-bold text-gray-800 mb-6 text-center">

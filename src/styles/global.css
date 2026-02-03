@@ -120,6 +120,16 @@ body {
   @apply flex flex-col items-center justify-center flex-grow w-full max-w-4xl mx-auto px-4 py-16 absolute inset-0;
 }
 
+.typeform-fullscreen-scroll {
+  @apply overflow-y-auto;
+}
+
+.typeform-content-scroll {
+  @apply relative inset-auto;
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+}
+
 .typeform-options {
   @apply flex flex-col sm:flex-row justify-center gap-6 w-full max-w-xs mx-auto mt-8;
 }
