@@ -85,6 +85,8 @@ const Builder: React.FC = () => {
   const publicLink = id ? `${origin}/f/${id}` : `${origin}/f/:id`;
   const inlineEmbed = `<iframe src=\"${publicLink}\" style=\"width:100%;height:700px;border:0;\" loading=\"lazy\"></iframe>`;
   const fullscreenEmbed = `<iframe src=\"${publicLink}\" style=\"position:fixed;inset:0;width:100%;height:100%;border:0;z-index:9999;\"></iframe>`;
+  const embedScript = `<script src=\"${origin}/embed.js\"></script>\n<div data-outform data-form-id=\"${id ?? ':id'}\" data-mode=\"inline\" data-height=\"700px\"></div>`;
+  const embedScriptFullscreen = `<script src=\"${origin}/embed.js\"></script>\n<div data-outform data-form-id=\"${id ?? ':id'}\" data-mode=\"fullscreen\"></div>`;
 
   const validationErrors = useMemo(() => validateSchema(schema), [schema]);
   const jsonPreview = useMemo(() => JSON.stringify(schema, null, 2), [schema]);
@@ -378,6 +380,18 @@ const Builder: React.FC = () => {
                   Save the form to get a live share link and embed code.
                 </div>
               )}
+              <div>
+                <div className="text-xs text-gray-500 mb-1">Embed script (inline)</div>
+                <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
+{embedScript}
+                </pre>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-1">Embed script (fullscreen)</div>
+                <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
+{embedScriptFullscreen}
+                </pre>
+              </div>
               <div>
                 <div className="text-xs text-gray-500 mb-1">Inline embed</div>
                 <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
