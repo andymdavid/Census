@@ -21,6 +21,14 @@ const Results: React.FC<ResultsProps> = () => {
   const navigate = useNavigate();
   const score = location.state?.score || 0;
   const form = (location.state?.form as LoadedFormSchema | undefined) ?? defaultForm;
+  const themeStyles = form.theme
+    ? ({
+        '--color-primary': form.theme.primaryColor,
+        '--color-background': form.theme.backgroundColor,
+        '--color-text': form.theme.textColor,
+        fontFamily: form.theme.fontFamily,
+      } as React.CSSProperties)
+    : undefined;
 
   // State for form inputs
   const [email, setEmail] = useState('');
@@ -127,6 +135,7 @@ const Results: React.FC<ResultsProps> = () => {
   return (
     <motion.div 
       className="typeform-fullscreen"
+      style={themeStyles}
       variants={pageVariants}
       initial="initial"
       animate={isExiting ? "exit" : "animate"}

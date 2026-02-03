@@ -23,6 +23,14 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
   const form = formOverride ?? loadForm();
   const questions = form.questions;
   const totalScore = form.totalScore;
+  const themeStyles = form.theme
+    ? ({
+        '--color-primary': form.theme.primaryColor,
+        '--color-background': form.theme.backgroundColor,
+        '--color-text': form.theme.textColor,
+        fontFamily: form.theme.fontFamily,
+      } as React.CSSProperties)
+    : undefined;
   const questionMap = useMemo(
     () => new Map(questions.map((question) => [question.id, question])),
     [questions]
@@ -215,7 +223,7 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
 
   return (
     // Full-screen container
-    <div className="typeform-fullscreen">
+    <div className="typeform-fullscreen" style={themeStyles}>
       {/* Top progress bar */}
       <div className="typeform-top-progress">
         <div className="typeform-thin-progress">

@@ -3,6 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import FormBuilder from '../components/FormBuilder';
 import type { FormSchemaV0 } from '../types/formSchema';
 
+const defaultTheme = {
+  primaryColor: '#4f46e5',
+  backgroundColor: '#f5f6fa',
+  textColor: '#1f2937',
+  fontFamily: 'Inter, sans-serif',
+  logoUrl: '',
+};
+
 const emptySchema: FormSchemaV0 = {
   version: 'v0',
   id: 'new-form',
@@ -10,6 +18,7 @@ const emptySchema: FormSchemaV0 = {
   description: '',
   questions: [],
   results: [],
+  theme: defaultTheme,
 };
 
 const validateSchema = (schema: FormSchemaV0) => {
@@ -71,6 +80,12 @@ const Builder: React.FC = () => {
   const [published, setPublished] = useState(false);
   const [showJson, setShowJson] = useState(false);
 
+  const origin =
+    typeof window !== 'undefined' ? window.location.origin : 'https://example.com';
+  const publicLink = id ? `${origin}/f/${id}` : `${origin}/f/:id`;
+  const inlineEmbed = `<iframe src=\"${publicLink}\" style=\"width:100%;height:700px;border:0;\" loading=\"lazy\"></iframe>`;
+  const fullscreenEmbed = `<iframe src=\"${publicLink}\" style=\"position:fixed;inset:0;width:100%;height:100%;border:0;z-index:9999;\"></iframe>`;
+
   const validationErrors = useMemo(() => validateSchema(schema), [schema]);
   const jsonPreview = useMemo(() => JSON.stringify(schema, null, 2), [schema]);
 
@@ -98,6 +113,10 @@ const Builder: React.FC = () => {
           setSchema({
             ...loadedSchema,
             id: id,
+            theme: {
+              ...defaultTheme,
+              ...(loadedSchema.theme ?? {}),
+            },
           });
           setPublished(data.published === 1);
         }
@@ -241,6 +260,137 @@ const Builder: React.FC = () => {
             </div>
 
             <FormBuilder schema={schema} onChange={setSchema} />
+
+            <div className="mt-10 border border-gray-200 rounded-md p-4 space-y-4">
+              <div className="text-sm text-gray-400 font-medium">Theme</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    Primary color
+                  </label>
+                  <input
+                    type="color"
+                    value={schema.theme?.primaryColor ?? defaultTheme.primaryColor}
+                    onChange={(event) =>
+                      setSchema((prev) => ({
+                        ...prev,
+                        theme: {
+                          ...defaultTheme,
+                          ...(prev.theme ?? {}),
+                          primaryColor: event.target.value,
+                        },
+                      }))
+                    }
+                    className="h-10 w-full border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    Background color
+                  </label>
+                  <input
+                    type="color"
+                    value={schema.theme?.backgroundColor ?? defaultTheme.backgroundColor}
+                    onChange={(event) =>
+                      setSchema((prev) => ({
+                        ...prev,
+                        theme: {
+                          ...defaultTheme,
+                          ...(prev.theme ?? {}),
+                          backgroundColor: event.target.value,
+                        },
+                      }))
+                    }
+                    className="h-10 w-full border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    Text color
+                  </label>
+                  <input
+                    type="color"
+                    value={schema.theme?.textColor ?? defaultTheme.textColor}
+                    onChange={(event) =>
+                      setSchema((prev) => ({
+                        ...prev,
+                        theme: {
+                          ...defaultTheme,
+                          ...(prev.theme ?? {}),
+                          textColor: event.target.value,
+                        },
+                      }))
+                    }
+                    className="h-10 w-full border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    Font family
+                  </label>
+                  <input
+                    type="text"
+                    value={schema.theme?.fontFamily ?? defaultTheme.fontFamily}
+                    onChange={(event) =>
+                      setSchema((prev) => ({
+                        ...prev,
+                        theme: {
+                          ...defaultTheme,
+                          ...(prev.theme ?? {}),
+                          fontFamily: event.target.value,
+                        },
+                      }))
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    Logo URL (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={schema.theme?.logoUrl ?? ''}
+                    onChange={(event) =>
+                      setSchema((prev) => ({
+                        ...prev,
+                        theme: {
+                          ...defaultTheme,
+                          ...(prev.theme ?? {}),
+                          logoUrl: event.target.value,
+                        },
+                      }))
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-10 border border-gray-200 rounded-md p-4 space-y-4">
+              <div className="text-sm text-gray-400 font-medium">Share &amp; Embed</div>
+              <div className="text-sm text-gray-600">
+                Public link:{' '}
+                <span className="font-medium text-gray-800">{publicLink}</span>
+              </div>
+              {isNew && (
+                <div className="text-xs text-gray-500">
+                  Save the form to get a live share link and embed code.
+                </div>
+              )}
+              <div>
+                <div className="text-xs text-gray-500 mb-1">Inline embed</div>
+                <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
+{inlineEmbed}
+                </pre>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-1">Fullscreen embed</div>
+                <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
+{fullscreenEmbed}
+                </pre>
+              </div>
+            </div>
 
             <div className="mt-8 flex items-center gap-4">
               <button

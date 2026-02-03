@@ -25,6 +25,14 @@ export interface FormResultThreshold {
   maxScore?: number;
 }
 
+export interface FormTheme {
+  primaryColor: string;
+  backgroundColor: string;
+  textColor: string;
+  fontFamily: string;
+  logoUrl?: string;
+}
+
 export interface FormSchemaV0 {
   version: 'v0';
   id: string;
@@ -32,6 +40,7 @@ export interface FormSchemaV0 {
   description?: string;
   questions: FormQuestion[];
   results: FormResultThreshold[];
+  theme?: FormTheme;
 }
 
 export type LoadedFormSchema = FormSchemaV0 & {
