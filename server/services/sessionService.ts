@@ -54,12 +54,25 @@ export const getSessionFromRequest = (request: Request) => {
   return session;
 };
 
+const requiresSecureCookies =
+  process.env.SESSION_COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production';
+
+const buildCookieOptions = () => {
+  const base = ['Path=/', 'HttpOnly'];
+  if (requiresSecureCookies) {
+    base.push('Secure', 'SameSite=Strict');
+  } else {
+    base.push('SameSite=Lax');
+  }
+  return base.join('; ');
+};
+
 export const buildSessionCookie = (sessionId: string, ttlSeconds: number) => {
-  return `session_id=${sessionId}; Max-Age=${ttlSeconds}; Path=/; HttpOnly; SameSite=Lax`;
+  return `session_id=${sessionId}; Max-Age=${ttlSeconds}; ${buildCookieOptions()}`;
 };
 
 export const buildSessionClearCookie = () => {
-  return 'session_id=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax';
+  return `session_id=; Max-Age=0; ${buildCookieOptions()}`;
 };
 
 export const getCookie = (request: Request, name: string) => {

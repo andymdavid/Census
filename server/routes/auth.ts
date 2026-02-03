@@ -10,7 +10,6 @@ import {
   consumeNonce,
   createNonce,
   extractChallenge,
-  isNonceValid,
   isValidAuthEvent,
   NostrAuthEvent,
 } from '../services/authService';
@@ -46,15 +45,18 @@ export const handleVerify = async (request: Request) => {
   }
 
   const challenge = extractChallenge(event);
-  if (!challenge || !isNonceValid(challenge)) {
+  if (!challenge) {
     return jsonResponse({ error: 'Invalid challenge.' }, { status: 400 });
+  }
+
+  const nonce = consumeNonce(challenge);
+  if (!nonce) {
+    return jsonResponse({ error: 'Invalid or expired challenge.' }, { status: 400 });
   }
 
   if (!isValidAuthEvent(event, challenge)) {
     return jsonResponse({ error: 'Invalid event.' }, { status: 400 });
   }
-
-  consumeNonce(challenge);
 
   const session = createSession(event.pubkey ?? null);
 

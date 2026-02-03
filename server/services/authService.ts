@@ -1,4 +1,5 @@
 import db from '../db';
+import { getEventHash, verifyEvent } from 'nostr-tools';
 
 const insertNonce = db.prepare(
   'INSERT INTO auth_nonces (challenge, created_at, expires_at) VALUES (?, ?, ?)'
@@ -23,20 +24,12 @@ export const consumeNonce = (challenge: string) => {
     | { challenge: string; created_at: number; expires_at: number }
     | undefined;
   if (!row) return null;
-  deleteNonce.run(challenge);
-  return row;
-};
-
-export const isNonceValid = (challenge: string) => {
-  const row = selectNonce.get(challenge) as
-    | { challenge: string; created_at: number; expires_at: number }
-    | undefined;
-  if (!row) return false;
   if (row.expires_at < Date.now()) {
     deleteNonce.run(challenge);
-    return false;
+    return null;
   }
-  return true;
+  deleteNonce.run(challenge);
+  return row;
 };
 
 export interface NostrAuthEvent {
@@ -62,5 +55,17 @@ export const isValidAuthEvent = (event: NostrAuthEvent, challenge: string) => {
   if (event.kind !== 22242) return false;
   const tagChallenge = extractChallenge(event);
   if (tagChallenge !== challenge) return false;
-  return true;
+
+  if (!event.id) return false;
+  const expectedId = getEventHash({
+    kind: event.kind,
+    created_at: event.created_at,
+    tags: event.tags ?? [],
+    content: event.content ?? '',
+    pubkey: event.pubkey,
+  });
+
+  if (event.id !== expectedId) return false;
+
+  return verifyEvent(event as Parameters<typeof verifyEvent>[0]);
 };
