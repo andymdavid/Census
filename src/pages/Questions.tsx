@@ -23,6 +23,7 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
   const form = formOverride ?? loadForm();
   const questions = form.questions;
   const totalScore = form.totalScore;
+  const logoUrl = form.theme?.logoUrl;
   const themeStyles = form.theme
     ? ({
         '--color-primary': form.theme.primaryColor,
@@ -224,6 +225,11 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
   return (
     // Full-screen container
     <div className="typeform-fullscreen" style={themeStyles}>
+      {logoUrl && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2">
+          <img src={logoUrl} alt="Form logo" className="h-10 object-contain" />
+        </div>
+      )}
       {/* Top progress bar */}
       <div className="typeform-top-progress">
         <div className="typeform-thin-progress">

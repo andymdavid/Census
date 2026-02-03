@@ -21,6 +21,7 @@ const Results: React.FC<ResultsProps> = () => {
   const navigate = useNavigate();
   const score = location.state?.score || 0;
   const form = (location.state?.form as LoadedFormSchema | undefined) ?? defaultForm;
+  const logoUrl = form.theme?.logoUrl;
   const themeStyles = form.theme
     ? ({
         '--color-primary': form.theme.primaryColor,
@@ -147,6 +148,11 @@ const Results: React.FC<ResultsProps> = () => {
         initial="hidden"
         animate={isExiting ? "exit" : "visible"}
       >
+        {logoUrl && (
+          <div className="absolute top-6 left-1/2 -translate-x-1/2">
+            <img src={logoUrl} alt="Form logo" className="h-10 object-contain" />
+          </div>
+        )}
         {submitted ? (
           <motion.div
             initial={{ opacity: 0 }}

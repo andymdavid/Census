@@ -61,7 +61,8 @@ body {
 }
 
 .typeform-button-primary {
-  @apply bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-lg shadow-sm transition duration-300 transform hover:-translate-y-1;
+  @apply text-white font-medium py-3 px-6 rounded-lg shadow-sm transition duration-300 transform hover:-translate-y-1;
+  background-color: var(--color-primary);
 }
 
 .typeform-button-success {
@@ -81,7 +82,8 @@ body {
 }
 
 .typeform-progress-fill {
-  @apply h-full bg-indigo-500 transition-all duration-500;
+  @apply h-full transition-all duration-500;
+  background-color: var(--color-primary);
 }
 
 .typeform-progress-text {
@@ -102,7 +104,8 @@ body {
 }
 
 .typeform-thin-progress-fill {
-  @apply h-full bg-indigo-500 transition-all duration-500;
+  @apply h-full transition-all duration-500;
+  background-color: var(--color-primary);
 }
 
 .typeform-category {
@@ -127,7 +130,9 @@ body {
 }
 
 .typeform-option-yes {
-  @apply border border-gray-300 text-gray-700 hover:border-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 hover:shadow-sm active:bg-emerald-100;
+  @apply border text-white hover:shadow-sm;
+  border-color: var(--color-primary);
+  background-color: var(--color-primary);
 }
 
 .typeform-option-no {
@@ -136,7 +141,9 @@ body {
 
 /* Main button style */
 .typeform-button {
-  @apply px-6 py-3 rounded-lg text-base font-medium border border-gray-300 text-gray-700 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-300 hover:shadow-sm active:bg-indigo-100;
+  @apply px-6 py-3 rounded-lg text-base font-medium border transition-all duration-300 hover:shadow-sm;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 /* Animation classes */
