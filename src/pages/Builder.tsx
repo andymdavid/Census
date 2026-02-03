@@ -23,6 +23,9 @@ const validateSchema = (schema: FormSchemaV0) => {
     if (!question.text.trim()) {
       errors.push(`Question ${question.id} is missing text.`);
     }
+    if (!question.category.trim()) {
+      errors.push(`Question ${question.id} is missing a category.`);
+    }
     if (!Number.isFinite(question.weight)) {
       errors.push(`Question ${question.id} has an invalid weight.`);
     }
@@ -90,8 +93,12 @@ const Builder: React.FC = () => {
           published?: number;
         };
         if (isMounted) {
+          const loadedSchema = data.schema ?? emptySchema;
           setTitle(data.title ?? '');
-          setSchema(data.schema ?? emptySchema);
+          setSchema({
+            ...loadedSchema,
+            id: id,
+          });
           setPublished(data.published === 1);
         }
       } catch (err) {
@@ -149,6 +156,7 @@ const Builder: React.FC = () => {
 
         const data = (await response.json()) as { id?: string };
         if (data.id) {
+          setSchema((prev) => ({ ...prev, id: data.id }));
           navigate(`/forms/${data.id}/edit`);
         }
       } else if (id) {
