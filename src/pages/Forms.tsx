@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
+import { ChevronDown, LayoutGrid, Plus, Search } from 'lucide-react';
 import type { FormSchemaV0 } from '../types/formSchema';
 
 interface FormListItem {
@@ -254,10 +255,14 @@ const Forms: React.FC = () => {
           style={{ backgroundColor: '#f7f7f8' }}
         >
           <div className="flex flex-1">
-            <aside className="w-72 p-5 flex flex-col gap-6 border-r-2 border-white h-full">
+            <aside className="w-72 p-5 flex flex-col gap-4 border-r-2 border-white h-full">
               <Dialog.Root open={modalOpen} onOpenChange={setModalOpen}>
                 <Dialog.Trigger asChild>
-                  <button type="button" className="typeform-button w-full">
+                  <button
+                    type="button"
+                    className="typeform-button w-full text-[12px] leading-none flex items-center justify-center"
+                    style={{ height: '30px' }}
+                  >
                     + Create a new form
                   </button>
                 </Dialog.Trigger>
@@ -338,21 +343,27 @@ const Forms: React.FC = () => {
                 </Dialog.Portal>
               </Dialog.Root>
 
-              <div>
-                <label htmlFor="search" className="block text-xs text-gray-400 mb-2">
-                  Search
-                </label>
-                <input
-                  id="search"
-                  type="text"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="Search"
-                />
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-sm text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <LayoutGrid className="h-4 w-4 text-gray-400" />
+                    <span className="font-medium">Workspaces</span>
+                  </div>
+                  <button className="h-8 w-8 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center">
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between text-sm text-gray-500">
+                  <span>Private</span>
+                  <ChevronDown className="h-4 w-4" />
+                </div>
+                <button className="w-full flex items-center justify-between rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700">
+                  <span>My workspace</span>
+                  <span className="text-xs text-gray-500">3</span>
+                </button>
               </div>
 
-              <div className="text-xs text-gray-400 border-t border-gray-100 pt-4">
+              <div className="text-xs text-gray-400 pt-2">
                 Responses collected
                 <div className="text-sm text-gray-700 mt-2">{forms.length} / 50,000</div>
               </div>
@@ -368,14 +379,29 @@ const Forms: React.FC = () => {
                       Invite
                     </button>
                   </div>
-                  <button className="text-xs text-gray-600 border border-gray-200 rounded-md px-3 py-1">
-                    Date created
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button className="text-xs text-gray-600 border border-gray-200 rounded-md px-3 py-1">
+                      Date created
+                    </button>
+                    <div
+                      className="flex items-center gap-2 rounded-xl px-3"
+                      style={{ height: '30px', backgroundColor: '#f0f0f0', border: '1px solid #f0f0f0' }}
+                    >
+                      <Search className="h-3.5 w-3.5 text-gray-400" />
+                      <input
+                        id="search"
+                        type="text"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        className="w-40 bg-transparent text-sm leading-none text-gray-600 focus:outline-none"
+                        placeholder="Search"
+                      />
+                    </div>
+                  </div>
                 </div>
-
               </div>
 
-              <div className="h-0.5 w-full bg-white/80 rounded-full mb-4" />
+              <div className="-ml-72 w-[calc(100%+18rem)] h-0.5 bg-white/80 mb-4" />
 
               <div className="grid grid-cols-[1fr_120px_120px_140px_80px] text-xs text-gray-400 px-6 py-2">
                 <div>Forms</div>
