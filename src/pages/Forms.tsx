@@ -234,7 +234,7 @@ const Forms: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      <header className="h-14 px-6 flex items-center justify-between border-b border-gray-100">
+      <header className="h-14 px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-semibold">
             OS
@@ -248,8 +248,8 @@ const Forms: React.FC = () => {
         </div>
       </header>
 
-      <div className="p-6">
-        <div className="bg-gray-50 border border-gray-200 rounded-2xl min-h-[78vh] overflow-hidden">
+      <div className="px-6 pb-6 pt-3">
+        <div className="rounded-2xl min-h-[82vh] overflow-hidden" style={{ backgroundColor: '#f7f7f8' }}>
           <div className="flex">
             <aside className="w-72 border-r border-gray-200 bg-white p-5 flex flex-col gap-6">
               <Dialog.Root open={modalOpen} onOpenChange={setModalOpen}>
