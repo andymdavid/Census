@@ -12,6 +12,11 @@ interface FormListItem {
   responses_count?: number;
 }
 
+interface FunnelStats {
+  totalStarts: number;
+  completions: number;
+}
+
 const defaultTheme = {
   primaryColor: '#4f46e5',
   backgroundColor: '#f5f6fa',
@@ -110,19 +115,30 @@ const Forms: React.FC = () => {
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [pubkey, setPubkey] = useState<string | null>(null);
+  const [funnelStats, setFunnelStats] = useState<Record<string, FunnelStats>>({});
 
   useEffect(() => {
     let isMounted = true;
 
     const load = async () => {
       try {
-        const response = await fetch('/api/forms');
-        if (!response.ok) {
+        const [formsResponse, meResponse] = await Promise.all([
+          fetch('/api/forms'),
+          fetch('/api/auth/me'),
+        ]);
+        if (!formsResponse.ok) {
           throw new Error('Failed to load forms.');
         }
-        const data = (await response.json()) as { forms?: FormListItem[] };
+        const data = (await formsResponse.json()) as { forms?: FormListItem[] };
         if (isMounted) {
           setForms(data.forms ?? []);
+        }
+        if (meResponse.ok) {
+          const me = (await meResponse.json()) as { pubkey?: string };
+          if (isMounted) {
+            setPubkey(me.pubkey ?? null);
+          }
         }
       } catch (err) {
         if (isMounted) {
@@ -141,6 +157,41 @@ const Forms: React.FC = () => {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadFunnels = async () => {
+      if (!forms.length) return;
+      const entries = await Promise.all(
+        forms.map(async (form) => {
+          try {
+            const response = await fetch(`/api/forms/${form.id}/responses/funnel`);
+            if (!response.ok) return [form.id, null] as const;
+            const data = (await response.json()) as FunnelStats;
+            return [form.id, data] as const;
+          } catch {
+            return [form.id, null] as const;
+          }
+        })
+      );
+      if (isMounted) {
+        const next: Record<string, FunnelStats> = {};
+        entries.forEach(([id, data]) => {
+          if (data) {
+            next[id] = data;
+          }
+        });
+        setFunnelStats(next);
+      }
+    };
+
+    loadFunnels();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [forms]);
 
   const filteredForms = useMemo(() => {
     if (!query.trim()) return forms;
@@ -179,185 +230,228 @@ const Forms: React.FC = () => {
     }
   };
 
+  const avatarLabel = pubkey ? pubkey.slice(0, 2).toUpperCase() : 'OF';
+
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <aside className="w-72 border-r border-gray-200 bg-white p-6 flex flex-col gap-6">
+    <div className="min-h-screen bg-white">
+      <header className="h-14 px-6 flex items-center justify-between border-b border-gray-100">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-semibold">
-            OF
+          <div className="h-8 w-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-semibold">
+            OS
           </div>
-          <div>
-            <div className="text-xs uppercase tracking-wide text-gray-400">Workspace</div>
-            <div className="text-lg font-semibold text-gray-800">Other Stuff</div>
+          <div className="text-sm font-medium text-gray-700">Other Stuff</div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold">
+            {avatarLabel}
           </div>
         </div>
+      </header>
 
-        <Dialog.Root open={modalOpen} onOpenChange={setModalOpen}>
-          <Dialog.Trigger asChild>
-            <button type="button" className="typeform-button w-full">
-              Create new form
-            </button>
-          </Dialog.Trigger>
-          <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 bg-black/40" />
-            <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-lg focus:outline-none">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <Dialog.Title className="text-xl font-semibold text-gray-800">
-                    Create new form
-                  </Dialog.Title>
-                  <Dialog.Description className="text-sm text-gray-500">
-                    Pick a template or question type.
-                  </Dialog.Description>
-                </div>
-                <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800">
-                  Close
-                </Dialog.Close>
-              </div>
+      <div className="p-6">
+        <div className="bg-gray-50 border border-gray-200 rounded-2xl min-h-[78vh] overflow-hidden">
+          <div className="flex">
+            <aside className="w-72 border-r border-gray-200 bg-white p-5 flex flex-col gap-6">
+              <Dialog.Root open={modalOpen} onOpenChange={setModalOpen}>
+                <Dialog.Trigger asChild>
+                  <button type="button" className="typeform-button w-full">
+                    + Create a new form
+                  </button>
+                </Dialog.Trigger>
+                <Dialog.Portal>
+                  <Dialog.Overlay className="fixed inset-0 bg-black/40" />
+                  <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-lg focus:outline-none">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <Dialog.Title className="text-xl font-semibold text-gray-800">
+                          Create new form
+                        </Dialog.Title>
+                        <Dialog.Description className="text-sm text-gray-500">
+                          Pick a template or question type.
+                        </Dialog.Description>
+                      </div>
+                      <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800">
+                        Close
+                      </Dialog.Close>
+                    </div>
 
-              <div className="space-y-6">
-                <div>
-                  <div className="text-sm font-medium text-gray-600 mb-3">Templates</div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {templateSchemas.map((template) => (
-                      <button
-                        key={template.key}
-                        type="button"
-                        className="of-card p-4 text-left hover:border-primary transition"
-                        onClick={() => createForm(template.schema, template.schema.title)}
-                        disabled={creating}
-                      >
-                        <div className="text-sm font-medium text-gray-800">{template.label}</div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Start with {template.label.toLowerCase()}.
+                    <div className="space-y-6">
+                      <div>
+                        <div className="text-sm font-medium text-gray-600 mb-3">Templates</div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {templateSchemas.map((template) => (
+                            <button
+                              key={template.key}
+                              type="button"
+                              className="of-card p-4 text-left hover:border-primary transition"
+                              onClick={() => createForm(template.schema, template.schema.title)}
+                              disabled={creating}
+                            >
+                              <div className="text-sm font-medium text-gray-800">{template.label}</div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                Start with {template.label.toLowerCase()}.
+                              </div>
+                            </button>
+                          ))}
                         </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                      </div>
 
-                <div>
-                  <div className="text-sm font-medium text-gray-600 mb-3">Question types</div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    {questionTypeTemplates.map((template) => (
-                      <button
-                        key={template.key}
-                        type="button"
-                        className="of-card p-3 text-left hover:border-primary transition"
-                        onClick={() =>
-                          createForm(
-                            createSchema({
-                              title: template.label,
-                              questions: [
-                                {
-                                  id: 1,
-                                  text: template.questionText,
-                                  weight: 0,
-                                  category: template.category,
-                                },
-                              ],
-                            }),
-                            template.label
-                          )
-                        }
-                        disabled={creating}
+                      <div>
+                        <div className="text-sm font-medium text-gray-600 mb-3">Question types</div>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                          {questionTypeTemplates.map((template) => (
+                            <button
+                              key={template.key}
+                              type="button"
+                              className="of-card p-3 text-left hover:border-primary transition"
+                              onClick={() =>
+                                createForm(
+                                  createSchema({
+                                    title: template.label,
+                                    questions: [
+                                      {
+                                        id: 1,
+                                        text: template.questionText,
+                                        weight: 0,
+                                        category: template.category,
+                                      },
+                                    ],
+                                  }),
+                                  template.label
+                                )
+                              }
+                              disabled={creating}
+                            >
+                              <div className="text-sm font-medium text-gray-800">{template.label}</div>
+                              <div className="text-xs text-gray-500 mt-1">Add a starter question.</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {creating && <div className="text-sm text-gray-500">Creating form...</div>}
+                    </div>
+                  </Dialog.Content>
+                </Dialog.Portal>
+              </Dialog.Root>
+
+              <div>
+                <label htmlFor="search" className="block text-xs text-gray-400 mb-2">
+                  Search
+                </label>
+                <input
+                  id="search"
+                  type="text"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Search"
+                />
+              </div>
+
+              <div className="text-xs text-gray-400 border-t border-gray-100 pt-4">
+                Responses collected
+                <div className="text-sm text-gray-700 mt-2">{forms.length} / 50,000</div>
+              </div>
+            </aside>
+
+            <main className="flex-1 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-semibold text-gray-800">My workspace</h2>
+                  <button className="text-gray-400 hover:text-gray-600">···</button>
+                  <button className="text-xs text-gray-600 border border-gray-200 rounded-full px-3 py-1">
+                    Invite
+                  </button>
+                </div>
+                <button className="text-xs text-gray-600 border border-gray-200 rounded-md px-3 py-1">
+                  Date created
+                </button>
+              </div>
+
+              <div className="grid grid-cols-[1fr_120px_120px_140px_80px] text-xs text-gray-400 px-4 py-2">
+                <div>Forms</div>
+                <div>Responses</div>
+                <div>Completion</div>
+                <div>Updated</div>
+                <div className="text-right">Actions</div>
+              </div>
+
+              {loading && <div className="text-gray-500 px-4 py-6">Loading...</div>}
+              {error && <div className="text-red-600 px-4 py-6">{error}</div>}
+
+              {!loading && !error && (
+                <div className="space-y-3">
+                  {filteredForms.length === 0 && (
+                    <div className="text-gray-500 px-4 py-6">No forms found.</div>
+                  )}
+                  {filteredForms.map((form) => {
+                    const funnel = funnelStats[form.id];
+                    const completionRate = funnel?.totalStarts
+                      ? Math.round((funnel.completions / funnel.totalStarts) * 100)
+                      : 0;
+                    return (
+                      <div
+                        key={form.id}
+                        className="bg-white border border-gray-200 rounded-xl px-4 py-3 grid grid-cols-[1fr_120px_120px_140px_80px] items-center hover:border-primary/40 hover:shadow-sm transition"
                       >
-                        <div className="text-sm font-medium text-gray-800">{template.label}</div>
-                        <div className="text-xs text-gray-500 mt-1">Add a starter question.</div>
-                      </button>
-                    ))}
-                  </div>
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-lg bg-emerald-700/80 text-white text-xs font-semibold flex items-center justify-center">
+                            OF
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-gray-800">{form.title}</div>
+                            <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                              <span
+                                className={`of-badge ${
+                                  form.published
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-gray-100 text-gray-600'
+                                }`}
+                              >
+                                {form.published ? 'Published' : 'Draft'}
+                              </span>
+                              <span className="of-pill">{form.responses_count ?? 0} responses</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-600">{form.responses_count ?? 0}</div>
+                        <div className="text-sm text-gray-600">{completionRate}%</div>
+                        <div className="text-sm text-gray-600">
+                          {new Date(form.updated_at).toLocaleDateString()}
+                        </div>
+                        <div className="flex items-center justify-end gap-3 text-sm">
+                          <Link
+                            to={`/forms/${form.id}/edit`}
+                            className="text-gray-600 hover:text-gray-800"
+                          >
+                            Edit
+                          </Link>
+                          <Link
+                            to={`/forms/${form.id}/analytics`}
+                            className="text-gray-600 hover:text-gray-800"
+                          >
+                            Analytics
+                          </Link>
+                          <Link
+                            to={`/f/${form.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-gray-600 hover:text-gray-800"
+                          >
+                            Share
+                          </Link>
+                          <button className="text-gray-400 hover:text-gray-600">···</button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                {creating && <div className="text-sm text-gray-500">Creating form...</div>}
-              </div>
-            </Dialog.Content>
-          </Dialog.Portal>
-        </Dialog.Root>
-
-        <div>
-          <label htmlFor="search" className="block text-xs text-gray-400 mb-2">
-            Search
-          </label>
-          <input
-            id="search"
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
-            placeholder="Search forms"
-          />
-        </div>
-
-        <div className="text-xs text-gray-400 border-t border-gray-100 pt-4">
-          Single workspace · 1 member
-        </div>
-      </aside>
-
-      <main className="flex-1 p-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-gray-400">Forms</div>
-            <h2 className="of-heading">My forms</h2>
+              )}
+            </main>
           </div>
         </div>
-
-        {loading && <div className="text-gray-500">Loading...</div>}
-        {error && <div className="text-red-600">{error}</div>}
-
-        {!loading && !error && (
-          <div className="space-y-3">
-            {filteredForms.length === 0 && (
-              <div className="text-gray-500">No forms found.</div>
-            )}
-            {filteredForms.map((form) => (
-              <div
-                key={form.id}
-                className="of-card p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 hover:border-primary/40 hover:shadow-md transition"
-              >
-                <div>
-                  <div className="text-lg font-medium text-gray-800">{form.title}</div>
-                  <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
-                    <span
-                      className={`of-badge ${
-                        form.published
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
-                      {form.published ? 'Published' : 'Draft'}
-                    </span>
-                    <span className="of-pill">{form.responses_count ?? 0} responses</span>
-                    <span>Updated {new Date(form.updated_at).toLocaleDateString()}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 text-sm">
-                  <Link
-                    to={`/forms/${form.id}/edit`}
-                    className="text-primary font-medium hover:text-primary/80"
-                  >
-                    Edit
-                  </Link>
-                  <Link
-                    to={`/forms/${form.id}/analytics`}
-                    className="text-gray-600 hover:text-gray-800"
-                  >
-                    Analytics
-                  </Link>
-                  <Link
-                    to={`/f/${form.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-gray-600 hover:text-gray-800"
-                  >
-                    Share
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
+      </div>
     </div>
   );
 };
