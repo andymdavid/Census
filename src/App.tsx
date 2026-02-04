@@ -1,10 +1,9 @@
 import React from 'react';
 import './App.css';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 
 // Import page components
-import Welcome from './pages/Welcome';
 import Questions from './pages/Questions';
 import Results from './pages/Results';
 import ThankYou from './pages/ThankYou';
@@ -24,8 +23,8 @@ const AnimatedRoutes = () => {
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        {/* Welcome page - Landing page */}
-        <Route path="/" element={<Welcome />} />
+        {/* Workspace home */}
+        <Route path="/" element={<Navigate to="/forms" replace />} />
         
         {/* Questions page - Assessment questions */}
         <Route path="/questions" element={<Questions />} />

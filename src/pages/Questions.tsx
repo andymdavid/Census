@@ -10,6 +10,8 @@ import type { LoadedFormSchema } from '../types/formSchema';
 interface QuestionsProps {
   form?: LoadedFormSchema;
   formId?: string;
+  onComplete?: (score: number) => void;
+  previewMode?: boolean;
 }
 
 /**
@@ -17,7 +19,12 @@ interface QuestionsProps {
  * This page displays the assessment questions and collects user responses
  * with a Typeform-like aesthetic and animations
  */
-const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => {
+const Questions: React.FC<QuestionsProps> = ({
+  form: formOverride,
+  formId,
+  onComplete,
+  previewMode = false,
+}) => {
   // Initialize the navigate function from React Router
   const navigate = useNavigate();
   const form = formOverride ?? loadForm();
@@ -139,9 +146,13 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
       setCurrentQuestionId(nextId);
     } else {
       const responseId = await submitResponse(newAnswers, updatedScore);
-      // Navigate to results page with the final score
-      // Use the updated score directly to ensure the last question's score is included
-      navigate('/results', { state: { score: updatedScore, form, formId, responseId } });
+      if (onComplete) {
+        onComplete(updatedScore);
+      } else {
+        // Navigate to results page with the final score
+        // Use the updated score directly to ensure the last question's score is included
+        navigate('/results', { state: { score: updatedScore, form, formId, responseId } });
+      }
     }
   };
 
@@ -228,14 +239,17 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
 
   return (
     // Full-screen container
-    <div className="typeform-fullscreen" style={themeStyles}>
+    <div
+      className={`typeform-fullscreen${previewMode ? ' typeform-preview' : ''}`}
+      style={themeStyles}
+    >
       {logoUrl && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2">
           <img src={logoUrl} alt="Form logo" className="h-10 object-contain" />
         </div>
       )}
       {/* Top progress bar */}
-      <div className="typeform-top-progress">
+      <div className={`typeform-top-progress${previewMode ? ' typeform-top-progress-preview' : ''}`}>
         <div className="typeform-thin-progress">
           <div 
             className="typeform-thin-progress-fill" 
@@ -253,7 +267,7 @@ const Questions: React.FC<QuestionsProps> = ({ form: formOverride, formId }) => 
           initial="initial"
           animate="animate"
           exit="exit"
-          className="typeform-content"
+          className={`typeform-content${previewMode ? ' typeform-content-preview' : ''}`}
         >
           {/* Question counter - small and subtle */}
           <div className="text-sm text-gray-400 mb-8 text-center font-medium">

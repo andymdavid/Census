@@ -95,8 +95,16 @@ body {
   @apply flex flex-col items-center justify-center min-h-screen w-full px-4 py-8 relative overflow-hidden;
 }
 
+.typeform-preview {
+  min-height: 520px;
+}
+
 .typeform-top-progress {
   @apply fixed top-0 left-0 w-full z-10;
+}
+
+.typeform-top-progress-preview {
+  position: absolute;
 }
 
 .typeform-thin-progress {
@@ -118,6 +126,11 @@ body {
 
 .typeform-content {
   @apply flex flex-col items-center justify-center flex-grow w-full max-w-4xl mx-auto px-4 py-16 absolute inset-0;
+}
+
+.typeform-content-preview {
+  position: relative;
+  inset: auto;
 }
 
 .typeform-fullscreen-scroll {

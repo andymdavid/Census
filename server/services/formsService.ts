@@ -13,7 +13,12 @@ const insertForm = db.prepare(
   'INSERT INTO forms (id, title, schema_json, created_at, updated_at, published) VALUES (?, ?, ?, ?, ?, ?)'
 );
 const selectForms = db.prepare(
-  'SELECT id, title, created_at, updated_at, published FROM forms ORDER BY updated_at DESC'
+  `
+  SELECT f.id, f.title, f.created_at, f.updated_at, f.published,
+         (SELECT COUNT(*) FROM responses r WHERE r.form_id = f.id) as responses_count
+  FROM forms f
+  ORDER BY f.updated_at DESC
+  `
 );
 const selectFormById = db.prepare(
   'SELECT id, title, schema_json, created_at, updated_at, published FROM forms WHERE id = ?'
@@ -28,7 +33,9 @@ const publishForm = db.prepare(
 
 export const listForms = () => {
   return selectForms.all() as Array<
-    Pick<FormRecord, 'id' | 'title' | 'created_at' | 'updated_at' | 'published'>
+    Pick<FormRecord, 'id' | 'title' | 'created_at' | 'updated_at' | 'published'> & {
+      responses_count: number;
+    }
   >;
 };
 
