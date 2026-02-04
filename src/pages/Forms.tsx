@@ -233,7 +233,7 @@ const Forms: React.FC = () => {
   const avatarLabel = pubkey ? pubkey.slice(0, 2).toUpperCase() : 'OF';
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white flex flex-col">
       <header className="h-14 px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-semibold">
@@ -248,10 +248,13 @@ const Forms: React.FC = () => {
         </div>
       </header>
 
-      <div className="px-6 pb-6 pt-3">
-        <div className="rounded-2xl min-h-[82vh] overflow-hidden" style={{ backgroundColor: '#f7f7f8' }}>
+      <div className="flex-1 px-6 pb-6 pt-3">
+        <div
+          className="rounded-2xl h-full overflow-hidden"
+          style={{ backgroundColor: '#f7f7f8' }}
+        >
           <div className="flex">
-            <aside className="w-72 border-r border-gray-200 bg-white p-5 flex flex-col gap-6">
+            <aside className="w-72 p-5 flex flex-col gap-6">
               <Dialog.Root open={modalOpen} onOpenChange={setModalOpen}>
                 <Dialog.Trigger asChild>
                   <button type="button" className="typeform-button w-full">
