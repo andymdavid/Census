@@ -248,7 +248,7 @@ const Forms: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex-1 px-6 pb-6 pt-3 flex">
+      <div className="flex-1 px-6 pb-6 flex" style={{ paddingTop: '0px' }}>
         <div
           className="rounded-2xl overflow-hidden flex-1 flex"
           style={{ backgroundColor: '#f7f7f8' }}
