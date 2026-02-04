@@ -250,11 +250,11 @@ const Forms: React.FC = () => {
 
       <div className="flex-1 px-6 pb-6 pt-3 flex">
         <div
-          className="rounded-2xl overflow-hidden flex-1"
+          className="rounded-2xl overflow-hidden flex-1 flex"
           style={{ backgroundColor: '#f7f7f8' }}
         >
-          <div className="flex">
-            <aside className="w-72 p-5 flex flex-col gap-6">
+          <div className="flex flex-1">
+            <aside className="w-72 p-5 flex flex-col gap-6 border-r-2 border-white h-full">
               <Dialog.Root open={modalOpen} onOpenChange={setModalOpen}>
                 <Dialog.Trigger asChild>
                   <button type="button" className="typeform-button w-full">
@@ -358,21 +358,26 @@ const Forms: React.FC = () => {
               </div>
             </aside>
 
-            <main className="flex-1 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-semibold text-gray-800">My workspace</h2>
-                  <button className="text-gray-400 hover:text-gray-600">···</button>
-                  <button className="text-xs text-gray-600 border border-gray-200 rounded-full px-3 py-1">
-                    Invite
+            <main className="flex-1 flex flex-col">
+              <div className="px-6 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-semibold text-gray-800">My workspace</h2>
+                    <button className="text-gray-400 hover:text-gray-600">···</button>
+                    <button className="text-xs text-gray-600 border border-gray-200 rounded-full px-3 py-1">
+                      Invite
+                    </button>
+                  </div>
+                  <button className="text-xs text-gray-600 border border-gray-200 rounded-md px-3 py-1">
+                    Date created
                   </button>
                 </div>
-                <button className="text-xs text-gray-600 border border-gray-200 rounded-md px-3 py-1">
-                  Date created
-                </button>
+
               </div>
 
-              <div className="grid grid-cols-[1fr_120px_120px_140px_80px] text-xs text-gray-400 px-4 py-2">
+              <div className="h-0.5 w-full bg-white/80 rounded-full mb-4" />
+
+              <div className="grid grid-cols-[1fr_120px_120px_140px_80px] text-xs text-gray-400 px-6 py-2">
                 <div>Forms</div>
                 <div>Responses</div>
                 <div>Completion</div>
@@ -380,13 +385,13 @@ const Forms: React.FC = () => {
                 <div className="text-right">Actions</div>
               </div>
 
-              {loading && <div className="text-gray-500 px-4 py-6">Loading...</div>}
-              {error && <div className="text-red-600 px-4 py-6">{error}</div>}
+              {loading && <div className="text-gray-500 px-6 py-6">Loading...</div>}
+              {error && <div className="text-red-600 px-6 py-6">{error}</div>}
 
               {!loading && !error && (
-                <div className="space-y-3">
+                <div className="space-y-3 px-6 pb-6">
                   {filteredForms.length === 0 && (
-                    <div className="text-gray-500 px-4 py-6">No forms found.</div>
+                    <div className="text-gray-500 px-2 py-6">No forms found.</div>
                   )}
                   {filteredForms.map((form) => {
                     const funnel = funnelStats[form.id];
