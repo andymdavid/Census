@@ -133,6 +133,23 @@ body {
   inset: auto;
 }
 
+/* Outform workspace utilities */
+.of-heading {
+  @apply text-lg font-semibold text-gray-800;
+}
+
+.of-card {
+  @apply border border-gray-200 rounded-xl bg-white shadow-sm;
+}
+
+.of-badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+}
+
+.of-pill {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600;
+}
+
 .typeform-fullscreen-scroll {
   @apply overflow-y-auto;
 }

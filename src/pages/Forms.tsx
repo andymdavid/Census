@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import * as Dialog from '@radix-ui/react-dialog';
 import type { FormSchemaV0 } from '../types/formSchema';
 
 interface FormListItem {
@@ -88,7 +89,12 @@ const templateSchemas = [
 
 const questionTypeTemplates = [
   { key: 'yesno', label: 'Yes/No', questionText: 'Yes/No question', category: 'Yes/No' },
-  { key: 'mc', label: 'Multiple Choice', questionText: 'Multiple choice question', category: 'Multiple Choice' },
+  {
+    key: 'mc',
+    label: 'Multiple Choice',
+    questionText: 'Multiple choice question',
+    category: 'Multiple Choice',
+  },
   { key: 'short', label: 'Short Text', questionText: 'Short answer question', category: 'Short Text' },
   { key: 'long', label: 'Long Text', questionText: 'Long answer question', category: 'Long Text' },
   { key: 'email', label: 'Email', questionText: 'Email address', category: 'Email' },
@@ -102,8 +108,8 @@ const Forms: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -163,7 +169,7 @@ const Forms: React.FC = () => {
       }
       const data = (await response.json()) as { id?: string };
       if (data.id) {
-        setShowModal(false);
+        setModalOpen(false);
         navigate(`/forms/${data.id}/edit`);
       }
     } catch (err) {
@@ -174,19 +180,101 @@ const Forms: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white flex">
-      <aside className="w-72 border-r border-gray-200 p-6 flex flex-col gap-6">
-        <div>
-          <div className="text-xs uppercase tracking-wide text-gray-400">Workspace</div>
-          <div className="text-xl font-semibold text-gray-800">My workspace</div>
+    <div className="min-h-screen bg-gray-50 flex">
+      <aside className="w-72 border-r border-gray-200 bg-white p-6 flex flex-col gap-6">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-semibold">
+            OF
+          </div>
+          <div>
+            <div className="text-xs uppercase tracking-wide text-gray-400">Workspace</div>
+            <div className="text-lg font-semibold text-gray-800">Other Stuff</div>
+          </div>
         </div>
-        <button
-          type="button"
-          className="typeform-button"
-          onClick={() => setShowModal(true)}
-        >
-          Create new form
-        </button>
+
+        <Dialog.Root open={modalOpen} onOpenChange={setModalOpen}>
+          <Dialog.Trigger asChild>
+            <button type="button" className="typeform-button w-full">
+              Create new form
+            </button>
+          </Dialog.Trigger>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 bg-black/40" />
+            <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-lg focus:outline-none">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <Dialog.Title className="text-xl font-semibold text-gray-800">
+                    Create new form
+                  </Dialog.Title>
+                  <Dialog.Description className="text-sm text-gray-500">
+                    Pick a template or question type.
+                  </Dialog.Description>
+                </div>
+                <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800">
+                  Close
+                </Dialog.Close>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <div className="text-sm font-medium text-gray-600 mb-3">Templates</div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {templateSchemas.map((template) => (
+                      <button
+                        key={template.key}
+                        type="button"
+                        className="of-card p-4 text-left hover:border-primary transition"
+                        onClick={() => createForm(template.schema, template.schema.title)}
+                        disabled={creating}
+                      >
+                        <div className="text-sm font-medium text-gray-800">{template.label}</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Start with {template.label.toLowerCase()}.
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm font-medium text-gray-600 mb-3">Question types</div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    {questionTypeTemplates.map((template) => (
+                      <button
+                        key={template.key}
+                        type="button"
+                        className="of-card p-3 text-left hover:border-primary transition"
+                        onClick={() =>
+                          createForm(
+                            createSchema({
+                              title: template.label,
+                              questions: [
+                                {
+                                  id: 1,
+                                  text: template.questionText,
+                                  weight: 0,
+                                  category: template.category,
+                                },
+                              ],
+                            }),
+                            template.label
+                          )
+                        }
+                        disabled={creating}
+                      >
+                        <div className="text-sm font-medium text-gray-800">{template.label}</div>
+                        <div className="text-xs text-gray-500 mt-1">Add a starter question.</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {creating && <div className="text-sm text-gray-500">Creating form...</div>}
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+
         <div>
           <label htmlFor="search" className="block text-xs text-gray-400 mb-2">
             Search
@@ -200,13 +288,17 @@ const Forms: React.FC = () => {
             placeholder="Search forms"
           />
         </div>
+
+        <div className="text-xs text-gray-400 border-t border-gray-100 pt-4">
+          Single workspace · 1 member
+        </div>
       </aside>
 
       <main className="flex-1 p-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <div className="text-sm text-gray-400">Forms</div>
-            <h2 className="text-2xl font-semibold text-gray-800">My forms</h2>
+            <div className="text-xs uppercase tracking-wide text-gray-400">Forms</div>
+            <h2 className="of-heading">My forms</h2>
           </div>
         </div>
 
@@ -221,14 +313,22 @@ const Forms: React.FC = () => {
             {filteredForms.map((form) => (
               <div
                 key={form.id}
-                className="border border-gray-200 rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                className="of-card p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 hover:border-primary/40 hover:shadow-md transition"
               >
                 <div>
                   <div className="text-lg font-medium text-gray-800">{form.title}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Updated {new Date(form.updated_at).toLocaleDateString()} ·{' '}
-                    {form.published ? 'Published' : 'Draft'} ·{' '}
-                    {form.responses_count ?? 0} responses
+                  <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                    <span
+                      className={`of-badge ${
+                        form.published
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {form.published ? 'Published' : 'Draft'}
+                    </span>
+                    <span className="of-pill">{form.responses_count ?? 0} responses</span>
+                    <span>Updated {new Date(form.updated_at).toLocaleDateString()}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-sm">
@@ -258,81 +358,6 @@ const Forms: React.FC = () => {
           </div>
         )}
       </main>
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-semibold text-gray-800">Create new form</h3>
-                <p className="text-sm text-gray-500">Pick a template or question type.</p>
-              </div>
-              <button
-                type="button"
-                className="text-sm text-gray-500 hover:text-gray-800"
-                onClick={() => setShowModal(false)}
-              >
-                Close
-              </button>
-            </div>
-
-            <div>
-              <div className="text-sm font-medium text-gray-600 mb-3">Templates</div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {templateSchemas.map((template) => (
-                  <button
-                    key={template.key}
-                    type="button"
-                    className="border border-gray-200 rounded-md p-4 text-left hover:border-primary transition"
-                    onClick={() => createForm(template.schema, template.schema.title)}
-                    disabled={creating}
-                  >
-                    <div className="text-sm font-medium text-gray-800">{template.label}</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Start with {template.label.toLowerCase()}.
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="text-sm font-medium text-gray-600 mb-3">Question types</div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                {questionTypeTemplates.map((template) => (
-                  <button
-                    key={template.key}
-                    type="button"
-                    className="border border-gray-200 rounded-md p-3 text-left hover:border-primary transition"
-                    onClick={() =>
-                      createForm(
-                        createSchema({
-                          title: template.label,
-                          questions: [
-                            {
-                              id: 1,
-                              text: template.questionText,
-                              weight: 0,
-                              category: template.category,
-                            },
-                          ],
-                        }),
-                        template.label
-                      )
-                    }
-                    disabled={creating}
-                  >
-                    <div className="text-sm font-medium text-gray-800">{template.label}</div>
-                    <div className="text-xs text-gray-500 mt-1">Add a starter question.</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {creating && <div className="text-sm text-gray-500">Creating form...</div>}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
