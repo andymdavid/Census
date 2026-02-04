@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Questions from './Questions';
 import type { FormSchemaV0 } from '../types/formSchema';
 import type { LoadedFormSchema } from '../types/formSchema';
+import * as Tabs from '@radix-ui/react-tabs';
+import * as Switch from '@radix-ui/react-switch';
 
 const defaultTheme = {
   primaryColor: '#4f46e5',
@@ -88,7 +90,6 @@ const Builder: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
-  const [showJson, setShowJson] = useState(false);
   const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
   const [previewStep, setPreviewStep] = useState<'intro' | 'questions'>('intro');
   const [showShare, setShowShare] = useState(false);
@@ -102,7 +103,6 @@ const Builder: React.FC = () => {
   const embedScriptFullscreen = `<script src="${origin}/embed.js"></script>\n<div data-outform data-form-id="${id ?? ':id'}" data-mode="fullscreen"></div>`;
 
   const validationErrors = useMemo(() => validateSchema(schema), [schema]);
-  const jsonPreview = useMemo(() => JSON.stringify(schema, null, 2), [schema]);
   const previewForm: LoadedFormSchema = useMemo(
     () => ({ ...schema, totalScore: getTotalScore(schema) }),
     [schema]
@@ -488,206 +488,251 @@ const Builder: React.FC = () => {
         </section>
 
         <aside className="w-80 p-4 overflow-y-auto">
-          <div className="space-y-6">
-            <div>
-              <div className="text-sm font-medium text-gray-600 mb-2">Form settings</div>
-              <label className="block text-xs text-gray-500 mb-1">Description</label>
-              <textarea
-                value={schema.description ?? ''}
-                onChange={(event) =>
-                  setSchema((prev) => ({ ...prev, description: event.target.value }))
-                }
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
-            </div>
+          <Tabs.Root defaultValue="form" className="of-tabs">
+            <Tabs.List className="of-tabs-list">
+              <Tabs.Trigger className="of-tabs-trigger" value="form">
+                Form
+              </Tabs.Trigger>
+              <Tabs.Trigger className="of-tabs-trigger" value="question">
+                Question
+              </Tabs.Trigger>
+              <Tabs.Trigger className="of-tabs-trigger" value="branching">
+                Branching
+              </Tabs.Trigger>
+              <Tabs.Trigger className="of-tabs-trigger" value="theme">
+                Theme
+              </Tabs.Trigger>
+              <Tabs.Trigger className="of-tabs-trigger" value="results">
+                Results
+              </Tabs.Trigger>
+              <Tabs.Trigger className="of-tabs-trigger" value="share">
+                Share
+              </Tabs.Trigger>
+            </Tabs.List>
 
-            <div>
-              <div className="text-sm font-medium text-gray-600 mb-2">Question properties</div>
-              {selectedQuestion ? (
-                <div className="space-y-3">
-                  <label className="block text-xs text-gray-500">Question text</label>
-                  <input
-                    type="text"
-                    value={selectedQuestion.text}
+            <Tabs.Content value="form">
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm font-medium text-gray-600 mb-2">Form settings</div>
+                  <label className="of-label">Description</label>
+                  <textarea
+                    value={schema.description ?? ''}
                     onChange={(event) =>
-                      updateQuestion(selectedQuestion.id, (question) => ({
-                        ...question,
-                        text: event.target.value,
-                      }))
+                      setSchema((prev) => ({ ...prev, description: event.target.value }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    rows={3}
+                    className="of-textarea"
                   />
-                  <label className="block text-xs text-gray-500">Category</label>
-                  <input
-                    type="text"
-                    value={selectedQuestion.category}
-                    onChange={(event) =>
-                      updateQuestion(selectedQuestion.id, (question) => ({
-                        ...question,
-                        category: event.target.value,
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                  <label className="block text-xs text-gray-500">Weight</label>
-                  <input
-                    type="number"
-                    value={selectedQuestion.weight}
-                    onChange={(event) =>
-                      updateQuestion(selectedQuestion.id, (question) => ({
-                        ...question,
-                        weight: Number(event.target.value),
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                  <button
-                    type="button"
-                    className="text-xs text-red-600 hover:text-red-800"
-                    onClick={() => removeQuestion(selectedQuestion.id)}
-                  >
-                    Remove question
-                  </button>
                 </div>
-              ) : (
-                <div className="text-sm text-gray-500">Select a question to edit.</div>
-              )}
-            </div>
+              </div>
+            </Tabs.Content>
 
-            {selectedQuestion && (
-              <div>
-                <div className="text-sm font-medium text-gray-600 mb-2">Branching</div>
-                <div className="flex items-center gap-2 mb-3">
-                  <input
-                    id="branching"
-                    type="checkbox"
-                    checked={Boolean(selectedQuestion.branching)}
-                    onChange={(event) => {
-                      if (!event.target.checked) {
-                        updateQuestion(selectedQuestion.id, (question) => ({
-                          ...question,
-                          branching: undefined,
-                        }));
-                        return;
-                      }
-                      const nextId = getNextId(schema, selectedQuestion.id);
-                      updateQuestion(selectedQuestion.id, (question) => ({
-                        ...question,
-                        branching: {
-                          next: nextId,
-                          conditions: [
-                            { when: { answer: true }, next: nextId },
-                            { when: { answer: false }, next: nextId },
-                          ],
-                        },
-                      }));
-                    }}
-                  />
-                  <label htmlFor="branching" className="text-sm text-gray-600">
-                    Enable branching
-                  </label>
-                </div>
-
-                {selectedQuestion.branching && (
+            <Tabs.Content value="question">
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-gray-600">Question properties</div>
+                {selectedQuestion ? (
                   <div className="space-y-3">
-                    <label className="block text-xs text-gray-500">Yes →</label>
-                    <select
-                      value={
-                        selectedQuestion.branching.conditions?.find((c) => c.when.answer)?.next ??
-                        ''
-                      }
-                      onChange={(event) => {
-                        const nextValue = Number(event.target.value);
-                        updateQuestion(selectedQuestion.id, (question) => ({
-                          ...question,
-                          branching: {
-                            ...(question.branching ?? {}),
-                            conditions: [
-                              { when: { answer: true }, next: nextValue },
-                              {
-                                when: { answer: false },
-                                next:
-                                  question.branching?.conditions?.find((c) => !c.when.answer)?.next ??
-                                  nextValue,
-                              },
-                            ],
-                          },
-                        }));
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    <div>
+                      <label className="of-label">Question text</label>
+                      <input
+                        type="text"
+                        value={selectedQuestion.text}
+                        onChange={(event) =>
+                          updateQuestion(selectedQuestion.id, (question) => ({
+                            ...question,
+                            text: event.target.value,
+                          }))
+                        }
+                        className="of-input"
+                      />
+                    </div>
+                    <div>
+                      <label className="of-label">Category</label>
+                      <input
+                        type="text"
+                        value={selectedQuestion.category}
+                        onChange={(event) =>
+                          updateQuestion(selectedQuestion.id, (question) => ({
+                            ...question,
+                            category: event.target.value,
+                          }))
+                        }
+                        className="of-input"
+                      />
+                    </div>
+                    <div>
+                      <label className="of-label">Weight</label>
+                      <input
+                        type="number"
+                        value={selectedQuestion.weight}
+                        onChange={(event) =>
+                          updateQuestion(selectedQuestion.id, (question) => ({
+                            ...question,
+                            weight: Number(event.target.value),
+                          }))
+                        }
+                        className="of-input"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs text-red-600 hover:text-red-800"
+                      onClick={() => removeQuestion(selectedQuestion.id)}
                     >
-                      {questionOptions.map((option) => (
-                        <option key={`yes-${option}`} value={option}>
-                          Question {option}
-                        </option>
-                      ))}
-                    </select>
-
-                    <label className="block text-xs text-gray-500">No →</label>
-                    <select
-                      value={
-                        selectedQuestion.branching.conditions?.find((c) => !c.when.answer)?.next ??
-                        ''
-                      }
-                      onChange={(event) => {
-                        const nextValue = Number(event.target.value);
-                        updateQuestion(selectedQuestion.id, (question) => ({
-                          ...question,
-                          branching: {
-                            ...(question.branching ?? {}),
-                            conditions: [
-                              {
-                                when: { answer: true },
-                                next:
-                                  question.branching?.conditions?.find((c) => c.when.answer)?.next ??
-                                  nextValue,
-                              },
-                              { when: { answer: false }, next: nextValue },
-                            ],
-                          },
-                        }));
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                    >
-                      {questionOptions.map((option) => (
-                        <option key={`no-${option}`} value={option}>
-                          Question {option}
-                        </option>
-                      ))}
-                    </select>
-
-                    <label className="block text-xs text-gray-500">Default next</label>
-                    <select
-                      value={selectedQuestion.branching.next ?? ''}
-                      onChange={(event) => {
-                        const nextValue = Number(event.target.value);
-                        updateQuestion(selectedQuestion.id, (question) => ({
-                          ...question,
-                          branching: {
-                            ...(question.branching ?? {}),
-                            next: nextValue,
-                          },
-                        }));
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                    >
-                      {questionOptions.map((option) => (
-                        <option key={`next-${option}`} value={option}>
-                          Question {option}
-                        </option>
-                      ))}
-                    </select>
+                      Remove question
+                    </button>
                   </div>
+                ) : (
+                  <div className="text-sm text-gray-500">Select a question to edit.</div>
                 )}
               </div>
-            )}
+            </Tabs.Content>
 
-            <div>
-              <div className="text-sm font-medium text-gray-600 mb-2">Theme</div>
+            <Tabs.Content value="branching">
+              {selectedQuestion ? (
+                <div className="space-y-3">
+                  <div className="text-sm font-medium text-gray-600">Branching</div>
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="branching" className="text-sm text-gray-600">
+                      Enable branching
+                    </label>
+                    <Switch.Root
+                      id="branching"
+                      className="of-switch"
+                      checked={Boolean(selectedQuestion.branching)}
+                      onCheckedChange={(checked) => {
+                        if (!checked) {
+                          updateQuestion(selectedQuestion.id, (question) => ({
+                            ...question,
+                            branching: undefined,
+                          }));
+                          return;
+                        }
+                        const nextId = getNextId(schema, selectedQuestion.id);
+                        updateQuestion(selectedQuestion.id, (question) => ({
+                          ...question,
+                          branching: {
+                            next: nextId,
+                            conditions: [
+                              { when: { answer: true }, next: nextId },
+                              { when: { answer: false }, next: nextId },
+                            ],
+                          },
+                        }));
+                      }}
+                    >
+                      <Switch.Thumb className="of-switch-thumb" />
+                    </Switch.Root>
+                  </div>
+
+                  {selectedQuestion.branching && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="of-label">Yes →</label>
+                        <select
+                          value={
+                            selectedQuestion.branching.conditions?.find((c) => c.when.answer)?.next ??
+                            ''
+                          }
+                          onChange={(event) => {
+                            const nextValue = Number(event.target.value);
+                            updateQuestion(selectedQuestion.id, (question) => ({
+                              ...question,
+                              branching: {
+                                ...(question.branching ?? {}),
+                                conditions: [
+                                  { when: { answer: true }, next: nextValue },
+                                  {
+                                    when: { answer: false },
+                                    next:
+                                      question.branching?.conditions?.find((c) => !c.when.answer)
+                                        ?.next ?? nextValue,
+                                  },
+                                ],
+                              },
+                            }));
+                          }}
+                          className="of-input"
+                        >
+                          {questionOptions.map((option) => (
+                            <option key={`yes-${option}`} value={option}>
+                              Question {option}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="of-label">No →</label>
+                        <select
+                          value={
+                            selectedQuestion.branching.conditions?.find((c) => !c.when.answer)?.next ??
+                            ''
+                          }
+                          onChange={(event) => {
+                            const nextValue = Number(event.target.value);
+                            updateQuestion(selectedQuestion.id, (question) => ({
+                              ...question,
+                              branching: {
+                                ...(question.branching ?? {}),
+                                conditions: [
+                                  {
+                                    when: { answer: true },
+                                    next:
+                                      question.branching?.conditions?.find((c) => c.when.answer)
+                                        ?.next ?? nextValue,
+                                  },
+                                  { when: { answer: false }, next: nextValue },
+                                ],
+                              },
+                            }));
+                          }}
+                          className="of-input"
+                        >
+                          {questionOptions.map((option) => (
+                            <option key={`no-${option}`} value={option}>
+                              Question {option}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="of-label">Default next</label>
+                        <select
+                          value={selectedQuestion.branching.next ?? ''}
+                          onChange={(event) => {
+                            const nextValue = Number(event.target.value);
+                            updateQuestion(selectedQuestion.id, (question) => ({
+                              ...question,
+                              branching: {
+                                ...(question.branching ?? {}),
+                                next: nextValue,
+                              },
+                            }));
+                          }}
+                          className="of-input"
+                        >
+                          {questionOptions.map((option) => (
+                            <option key={`next-${option}`} value={option}>
+                              Question {option}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500">Select a question to configure branching.</div>
+              )}
+            </Tabs.Content>
+
+            <Tabs.Content value="theme">
               <div className="space-y-3">
+                <div className="text-sm font-medium text-gray-600">Theme</div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Primary color</label>
+                  <label className="of-label">Primary color</label>
                   <input
                     type="color"
                     value={schema.theme?.primaryColor ?? defaultTheme.primaryColor}
@@ -701,11 +746,11 @@ const Builder: React.FC = () => {
                         },
                       }))
                     }
-                    className="h-10 w-full border border-gray-300 rounded-md"
+                    className="h-10 w-full border border-gray-200 rounded-md"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Background color</label>
+                  <label className="of-label">Background color</label>
                   <input
                     type="color"
                     value={schema.theme?.backgroundColor ?? defaultTheme.backgroundColor}
@@ -719,11 +764,11 @@ const Builder: React.FC = () => {
                         },
                       }))
                     }
-                    className="h-10 w-full border border-gray-300 rounded-md"
+                    className="h-10 w-full border border-gray-200 rounded-md"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Text color</label>
+                  <label className="of-label">Text color</label>
                   <input
                     type="color"
                     value={schema.theme?.textColor ?? defaultTheme.textColor}
@@ -737,11 +782,11 @@ const Builder: React.FC = () => {
                         },
                       }))
                     }
-                    className="h-10 w-full border border-gray-300 rounded-md"
+                    className="h-10 w-full border border-gray-200 rounded-md"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Font family</label>
+                  <label className="of-label">Font family</label>
                   <input
                     type="text"
                     value={schema.theme?.fontFamily ?? defaultTheme.fontFamily}
@@ -755,11 +800,11 @@ const Builder: React.FC = () => {
                         },
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    className="of-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Logo URL</label>
+                  <label className="of-label">Logo URL (optional)</label>
                   <input
                     type="text"
                     value={schema.theme?.logoUrl ?? ''}
@@ -773,149 +818,111 @@ const Builder: React.FC = () => {
                         },
                       }))
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    className="of-input"
                   />
                 </div>
               </div>
-            </div>
+            </Tabs.Content>
 
-            <div>
-              <div className="text-sm font-medium text-gray-600 mb-2">Results</div>
-              <div className="space-y-4">
+            <Tabs.Content value="results">
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-gray-600">Results</div>
                 {resultOptions.length === 0 && (
-                  <div className="text-sm text-gray-500">No thresholds yet.</div>
+                  <div className="text-sm text-gray-500">No results yet.</div>
                 )}
                 {resultOptions.map((result, index) => (
-                  <div key={`result-${index}`} className="border border-gray-200 rounded-md p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-xs text-gray-500">Result {index + 1}</div>
-                      <button
-                        type="button"
-                        className="text-xs text-red-600 hover:text-red-800"
-                        onClick={() =>
-                          setSchema((prev) => ({
-                            ...prev,
-                            results: prev.results.filter((_, idx) => idx !== index),
-                          }))
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
+                  <div key={`${result.label}-${index}`} className="border border-gray-200 rounded-md p-3 space-y-2">
+                    <div className="text-xs text-gray-500">Result {index + 1}</div>
                     <input
                       type="text"
                       value={result.label}
-                      onChange={(event) =>
-                        setSchema((prev) => ({
-                          ...prev,
-                          results: prev.results.map((entry, idx) =>
-                            idx === index ? { ...entry, label: event.target.value } : entry
-                          ),
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm mb-2"
+                      onChange={(event) => {
+                        const nextResults = schema.results.map((entry, idx) =>
+                          idx === index ? { ...entry, label: event.target.value } : entry
+                        );
+                        setSchema((prev) => ({ ...prev, results: nextResults }));
+                      }}
+                      className="of-input"
                       placeholder="Label"
                     />
-                    <div className="grid grid-cols-2 gap-2 mb-2">
+                    <textarea
+                      value={result.description}
+                      onChange={(event) => {
+                        const nextResults = schema.results.map((entry, idx) =>
+                          idx === index ? { ...entry, description: event.target.value } : entry
+                        );
+                        setSchema((prev) => ({ ...prev, results: nextResults }));
+                      }}
+                      rows={3}
+                      className="of-textarea"
+                      placeholder="Description"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
                       <input
                         type="number"
                         value={result.minScore ?? ''}
-                        onChange={(event) =>
-                          setSchema((prev) => ({
-                            ...prev,
-                            results: prev.results.map((entry, idx) =>
-                              idx === index
-                                ? {
-                                    ...entry,
-                                    minScore: event.target.value ? Number(event.target.value) : undefined,
-                                  }
-                                : entry
-                            ),
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        onChange={(event) => {
+                          const nextValue = Number(event.target.value);
+                          const nextResults = schema.results.map((entry, idx) =>
+                            idx === index ? { ...entry, minScore: nextValue } : entry
+                          );
+                          setSchema((prev) => ({ ...prev, results: nextResults }));
+                        }}
+                        className="of-input"
                         placeholder="Min"
                       />
                       <input
                         type="number"
                         value={result.maxScore ?? ''}
-                        onChange={(event) =>
-                          setSchema((prev) => ({
-                            ...prev,
-                            results: prev.results.map((entry, idx) =>
-                              idx === index
-                                ? {
-                                    ...entry,
-                                    maxScore: event.target.value ? Number(event.target.value) : undefined,
-                                  }
-                                : entry
-                            ),
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        onChange={(event) => {
+                          const nextValue = Number(event.target.value);
+                          const nextResults = schema.results.map((entry, idx) =>
+                            idx === index ? { ...entry, maxScore: nextValue } : entry
+                          );
+                          setSchema((prev) => ({ ...prev, results: nextResults }));
+                        }}
+                        className="of-input"
                         placeholder="Max"
                       />
                     </div>
-                    <textarea
-                      value={result.description}
-                      onChange={(event) =>
-                        setSchema((prev) => ({
-                          ...prev,
-                          results: prev.results.map((entry, idx) =>
-                            idx === index ? { ...entry, description: event.target.value } : entry
-                          ),
-                        }))
-                      }
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                      placeholder="Description"
-                    />
                   </div>
                 ))}
-                <button
-                  type="button"
-                  className="text-xs text-primary hover:text-primary/80"
-                  onClick={() =>
-                    setSchema((prev) => ({
-                      ...prev,
-                      results: [
-                        ...prev.results,
-                        { label: 'New result', description: '', minScore: undefined, maxScore: undefined },
-                      ],
-                    }))
-                  }
-                >
-                  Add result threshold
-                </button>
               </div>
-            </div>
+            </Tabs.Content>
 
-            {validationErrors.length > 0 && (
-              <div className="text-sm text-red-600 space-y-1">
-                {validationErrors.map((issue) => (
-                  <div key={issue}>{issue}</div>
-                ))}
+            <Tabs.Content value="share">
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-gray-600">Share</div>
+                <div className="text-sm text-gray-600">
+                  Public link: <span className="font-medium text-gray-800">{publicLink}</span>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Embed script (inline)</div>
+                  <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
+{embedScript}
+                  </pre>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Embed script (fullscreen)</div>
+                  <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
+{embedScriptFullscreen}
+                  </pre>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Inline iframe</div>
+                  <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
+{inlineEmbed}
+                  </pre>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Fullscreen iframe</div>
+                  <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
+{fullscreenEmbed}
+                  </pre>
+                </div>
               </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setShowJson((prev) => !prev)}
-              className="text-xs font-medium text-gray-500 hover:text-gray-700"
-            >
-              {showJson ? 'Hide JSON' : 'Show JSON'}
-            </button>
-
-            {showJson && (
-              <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
-{jsonPreview}
-              </pre>
-            )}
-
-            {status === 'error' && error && (
-              <div className="text-sm text-red-600">{error}</div>
-            )}
-          </div>
+            </Tabs.Content>
+          </Tabs.Root>
         </aside>
       </div>
     </div>

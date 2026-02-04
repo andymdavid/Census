@@ -169,6 +169,59 @@ body {
   color: var(--color-primary);
 }
 
+.of-panel {
+  @apply bg-white border border-gray-200 rounded-xl;
+}
+
+.of-panel-header {
+  @apply text-xs uppercase tracking-wide text-gray-400;
+}
+
+.of-label {
+  @apply block text-xs font-medium text-gray-500 mb-1;
+}
+
+.of-input {
+  @apply w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+}
+
+.of-textarea {
+  @apply w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+}
+
+.of-tabs {
+  @apply flex flex-col gap-4;
+}
+
+.of-tabs-list {
+  @apply inline-flex flex-wrap gap-2 bg-gray-100 p-1 rounded-lg;
+}
+
+.of-tabs-trigger {
+  @apply px-3 py-1.5 text-xs font-medium text-gray-500 rounded-md transition;
+}
+
+.of-tabs-trigger[data-state='active'] {
+  @apply bg-white text-gray-900 shadow-sm;
+}
+
+.of-switch {
+  @apply w-10 h-6 bg-gray-200 rounded-full relative transition;
+}
+
+.of-switch[data-state='checked'] {
+  background-color: var(--color-primary);
+}
+
+.of-switch-thumb {
+  @apply block w-5 h-5 bg-white rounded-full shadow-sm transition;
+  transform: translateX(2px);
+}
+
+.of-switch-thumb[data-state='checked'] {
+  transform: translateX(18px);
+}
+
 /* Animation classes */
 .fade-in {
   animation: fadeIn 0.5s ease-in-out;
