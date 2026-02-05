@@ -260,8 +260,7 @@ const Forms: React.FC = () => {
                 <Dialog.Trigger asChild>
                   <button
                     type="button"
-                    className="typeform-button w-full text-[12px] leading-none flex items-center justify-center"
-                    style={{ height: '30px' }}
+                    className="w-full h-[30px] text-[12px] leading-none flex items-center justify-center rounded-xl border bg-[#177767] border-[#177767] text-white transition hover:bg-[#146957] hover:border-[#146957]"
                   >
                     + Create a new form
                   </button>
