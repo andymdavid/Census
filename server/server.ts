@@ -3,6 +3,7 @@ import { handleAuthRoutes } from './routes/auth';
 import { handleFormsRoutes } from './routes/forms';
 import { handleResponsesRoutes } from './routes/responses';
 import { handleLeadsRoutes } from './routes/leads';
+import { handleWorkspacesRoutes } from './routes/workspaces';
 
 const publicDir = `${process.cwd()}/public`;
 const buildDir = `${process.cwd()}/build`;
@@ -34,6 +35,10 @@ const handler = async (request: Request, server: Server) => {
 
   if (url.pathname.includes('/leads')) {
     return handleLeadsRoutes(request);
+  }
+
+  if (url.pathname.startsWith('/api/workspaces')) {
+    return handleWorkspacesRoutes(request);
   }
 
   if (url.pathname.startsWith('/api/forms')) {

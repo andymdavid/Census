@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ChevronDown, LayoutGrid, Plus, Search } from 'lucide-react';
 import type { FormSchemaV0 } from '../types/formSchema';
 
@@ -16,6 +17,13 @@ interface FormListItem {
 interface FunnelStats {
   totalStarts: number;
   completions: number;
+}
+
+interface WorkspaceItem {
+  id: string;
+  name: string;
+  created_at: number;
+  updated_at: number;
 }
 
 const defaultTheme = {
@@ -118,27 +126,43 @@ const Forms: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [pubkey, setPubkey] = useState<string | null>(null);
   const [funnelStats, setFunnelStats] = useState<Record<string, FunnelStats>>({});
+  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [npub, setNpub] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
     const load = async () => {
       try {
-        const [formsResponse, meResponse] = await Promise.all([
-          fetch('/api/forms'),
+        const [meResponse, workspacesResponse] = await Promise.all([
           fetch('/api/auth/me'),
+          fetch('/api/workspaces'),
         ]);
-        if (!formsResponse.ok) {
-          throw new Error('Failed to load forms.');
+        if (!workspacesResponse.ok) {
+          throw new Error('Failed to load workspaces.');
         }
-        const data = (await formsResponse.json()) as { forms?: FormListItem[] };
+        const workspaceData = (await workspacesResponse.json()) as { workspaces?: WorkspaceItem[] };
         if (isMounted) {
-          setForms(data.forms ?? []);
+          const list = workspaceData.workspaces ?? [];
+          setWorkspaces(list);
+          const storedWorkspaceId = localStorage.getItem('outform.activeWorkspaceId');
+          const fallbackId = list[0]?.id ?? null;
+          const nextId = storedWorkspaceId && workspaceData.workspaces?.some((w) => w.id === storedWorkspaceId)
+            ? storedWorkspaceId
+            : fallbackId;
+          setActiveWorkspaceId(nextId);
+          if (nextId) {
+            localStorage.setItem('outform.activeWorkspaceId', nextId);
+          }
         }
         if (meResponse.ok) {
-          const me = (await meResponse.json()) as { pubkey?: string };
+          const meData = (await meResponse.json()) as { pubkey?: string; npub?: string };
           if (isMounted) {
-            setPubkey(me.pubkey ?? null);
+            setPubkey(meData.pubkey ?? null);
+            setNpub(meData.npub ?? null);
           }
         }
       } catch (err) {
@@ -194,6 +218,34 @@ const Forms: React.FC = () => {
     };
   }, [forms]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadForms = async () => {
+      if (!activeWorkspaceId) return;
+      try {
+        const response = await fetch(`/api/forms?workspaceId=${activeWorkspaceId}`);
+        if (!response.ok) {
+          throw new Error('Failed to load forms.');
+        }
+        const data = (await response.json()) as { forms?: FormListItem[] };
+        if (isMounted) {
+          setForms(data.forms ?? []);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Unknown error');
+        }
+      }
+    };
+
+    loadForms();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeWorkspaceId]);
+
   const filteredForms = useMemo(() => {
     if (!query.trim()) return forms;
     const lowered = query.toLowerCase();
@@ -203,6 +255,9 @@ const Forms: React.FC = () => {
   const createForm = async (schema: FormSchemaV0, title: string) => {
     setCreating(true);
     try {
+      if (!activeWorkspaceId) {
+        throw new Error('Select a workspace first.');
+      }
       const response = await fetch('/api/forms', {
         method: 'POST',
         headers: {
@@ -214,6 +269,7 @@ const Forms: React.FC = () => {
             ...schema,
             title,
           },
+          workspaceId: activeWorkspaceId,
         }),
       });
       if (!response.ok) {
@@ -232,6 +288,7 @@ const Forms: React.FC = () => {
   };
 
   const avatarLabel = pubkey ? pubkey.slice(0, 2).toUpperCase() : 'OF';
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -243,9 +300,36 @@ const Forms: React.FC = () => {
           <div className="text-sm font-medium text-gray-700">Other Stuff</div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold">
-            {avatarLabel}
-          </div>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button className="h-9 w-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold">
+                {avatarLabel}
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                sideOffset={8}
+                align="end"
+                className="w-64 rounded-xl bg-white p-4 shadow-xl border border-gray-100"
+              >
+                <div className="text-sm font-semibold text-gray-800">Profile</div>
+                <div className="text-xs text-gray-500 mt-1 break-all">{npub ?? 'Unknown user'}</div>
+                {activeWorkspace && (
+                  <div className="text-xs text-gray-400 mt-3">
+                    Workspace: <span className="text-gray-600">{activeWorkspace.name}</span>
+                  </div>
+                )}
+                <button
+                  className="mt-4 w-full text-sm text-gray-600 hover:text-gray-800 border border-gray-200 rounded-lg px-3 py-2"
+                  onClick={() => {
+                    fetch('/api/auth/logout', { method: 'POST' }).finally(() => window.location.reload());
+                  }}
+                >
+                  Log out
+                </button>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </div>
       </header>
 
@@ -266,36 +350,38 @@ const Forms: React.FC = () => {
                   </button>
                 </Dialog.Trigger>
                 <Dialog.Portal>
-                  <Dialog.Overlay className="fixed inset-0 bg-black/40" />
-                  <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-lg focus:outline-none">
-                    <div className="flex items-center justify-between mb-4">
+                  <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+                  <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-7 shadow-2xl focus:outline-none">
+                    <div className="flex items-start justify-between mb-5">
                       <div>
-                        <Dialog.Title className="text-xl font-semibold text-gray-800">
+                        <Dialog.Title className="text-2xl font-semibold text-gray-900">
                           Create new form
                         </Dialog.Title>
-                        <Dialog.Description className="text-sm text-gray-500">
+                        <Dialog.Description className="text-sm text-gray-500 mt-1">
                           Pick a template or question type.
                         </Dialog.Description>
                       </div>
-                      <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800">
+                      <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-full border border-gray-200">
                         Close
                       </Dialog.Close>
                     </div>
 
-                    <div className="space-y-6">
+                    <div className="space-y-7">
                       <div>
-                        <div className="text-sm font-medium text-gray-600 mb-3">Templates</div>
+                        <div className="text-xs uppercase tracking-wide text-gray-400 mb-3">
+                          Templates
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           {templateSchemas.map((template) => (
                             <button
                               key={template.key}
                               type="button"
-                              className="of-card p-4 text-left hover:border-primary transition"
+                              className="of-card p-4 text-left hover:border-primary/60 hover:shadow-md transition"
                               onClick={() => createForm(template.schema, template.schema.title)}
                               disabled={creating}
                             >
                               <div className="text-sm font-medium text-gray-800">{template.label}</div>
-                              <div className="text-xs text-gray-500 mt-1">
+                              <div className="text-xs text-gray-500 mt-1 leading-relaxed">
                                 Start with {template.label.toLowerCase()}.
                               </div>
                             </button>
@@ -304,13 +390,15 @@ const Forms: React.FC = () => {
                       </div>
 
                       <div>
-                        <div className="text-sm font-medium text-gray-600 mb-3">Question types</div>
+                        <div className="text-xs uppercase tracking-wide text-gray-400 mb-3">
+                          Question types
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                           {questionTypeTemplates.map((template) => (
                             <button
                               key={template.key}
                               type="button"
-                              className="of-card p-3 text-left hover:border-primary transition"
+                              className="of-card p-3 text-left hover:border-primary/60 hover:shadow-md transition"
                               onClick={() =>
                                 createForm(
                                   createSchema({
@@ -342,30 +430,111 @@ const Forms: React.FC = () => {
                 </Dialog.Portal>
               </Dialog.Root>
 
-              <div className="space-y-4">
+              <div className="space-y-4 mt-4">
                 <div className="flex items-center justify-between text-sm text-gray-600">
                   <div className="flex items-center gap-2">
                     <LayoutGrid className="h-4 w-4 text-gray-400" />
                     <span className="font-medium">Workspaces</span>
                   </div>
-                  <button className="h-8 w-8 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center">
-                    <Plus className="h-4 w-4" />
-                  </button>
+                  <Dialog.Root open={workspaceModalOpen} onOpenChange={setWorkspaceModalOpen}>
+                    <Dialog.Trigger asChild>
+                      <button className="h-8 w-8 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center">
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </Dialog.Trigger>
+                    <Dialog.Portal>
+                      <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+                      <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl focus:outline-none">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <Dialog.Title className="text-lg font-semibold text-gray-900">
+                              New workspace
+                            </Dialog.Title>
+                            <Dialog.Description className="text-sm text-gray-500 mt-1">
+                              Create a workspace to organize your forms.
+                            </Dialog.Description>
+                          </div>
+                          <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-full border border-gray-200">
+                            Close
+                          </Dialog.Close>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div>
+                            <label htmlFor="workspace-name" className="text-xs text-gray-500">
+                              Workspace name
+                            </label>
+                            <input
+                              id="workspace-name"
+                              type="text"
+                              value={workspaceName}
+                              onChange={(event) => setWorkspaceName(event.target.value)}
+                              className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              placeholder="e.g. Product team"
+                            />
+                          </div>
+                          <div className="flex items-center justify-end gap-2">
+                            <Dialog.Close className="text-sm text-gray-600 hover:text-gray-800 px-3 py-2">
+                              Cancel
+                            </Dialog.Close>
+                            <button
+                              type="button"
+                              className="px-4 py-2 rounded-xl bg-[#177767] text-white text-sm hover:bg-[#146957] transition"
+                              onClick={async () => {
+                                const trimmed = workspaceName.trim();
+                                if (!trimmed) return;
+                                const response = await fetch('/api/workspaces', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ name: trimmed }),
+                                });
+                                if (!response.ok) return;
+                                const data = (await response.json()) as { id?: string };
+                                if (data.id) {
+                                  const newWorkspace: WorkspaceItem = {
+                                    id: data.id,
+                                    name: trimmed,
+                                    created_at: Date.now(),
+                                    updated_at: Date.now(),
+                                  };
+                                  setWorkspaces((prev) => [...prev, newWorkspace]);
+                                  setActiveWorkspaceId(data.id);
+                                  localStorage.setItem('outform.activeWorkspaceId', data.id);
+                                }
+                                setWorkspaceName('');
+                                setWorkspaceModalOpen(false);
+                              }}
+                            >
+                              Create workspace
+                            </button>
+                          </div>
+                        </div>
+                      </Dialog.Content>
+                    </Dialog.Portal>
+                  </Dialog.Root>
                 </div>
                 <div className="flex items-center justify-between text-sm text-gray-500">
                   <span>Private</span>
                   <ChevronDown className="h-4 w-4" />
                 </div>
-                <button className="w-full flex items-center justify-between rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700">
-                  <span>My workspace</span>
-                  <span className="text-xs text-gray-500">3</span>
-                </button>
+                {workspaces.map((workspace) => (
+                  <button
+                    key={workspace.id}
+                    className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
+                      workspace.id === activeWorkspaceId
+                        ? 'bg-gray-100 text-gray-700'
+                        : 'text-gray-500 hover:bg-gray-100'
+                    }`}
+                    onClick={() => {
+                      setActiveWorkspaceId(workspace.id);
+                      localStorage.setItem('outform.activeWorkspaceId', workspace.id);
+                    }}
+                  >
+                    <span>{workspace.name}</span>
+                  </button>
+                ))}
               </div>
 
-              <div className="text-xs text-gray-400 pt-2">
-                Responses collected
-                <div className="text-sm text-gray-700 mt-2">{forms.length} / 50,000</div>
-              </div>
             </aside>
 
             <main className="flex-1 flex flex-col">

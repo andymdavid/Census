@@ -13,6 +13,8 @@ import {
   isValidAuthEvent,
   NostrAuthEvent,
 } from '../services/authService';
+import { ensureDefaultWorkspace } from '../services/workspaceService';
+import { nip19 } from 'nostr-tools';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
   return new Response(JSON.stringify(data), {
@@ -59,6 +61,9 @@ export const handleVerify = async (request: Request) => {
   }
 
   const session = createSession(event.pubkey ?? null);
+  if (event.pubkey) {
+    ensureDefaultWorkspace(event.pubkey);
+  }
 
   return jsonResponse(
     {
@@ -100,7 +105,8 @@ export const handleAuthRoutes = async (request: Request) => {
     if (!session) {
       return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
     }
-    return jsonResponse({ pubkey: session.pubkey });
+    const npub = session.pubkey ? nip19.npubEncode(session.pubkey) : null;
+    return jsonResponse({ pubkey: session.pubkey, npub });
   }
 
   if (request.method === 'POST' && url.pathname === '/api/auth/nonce') {

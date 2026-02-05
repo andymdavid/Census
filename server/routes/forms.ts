@@ -7,6 +7,7 @@ import {
   updateFormById,
 } from '../services/formsService';
 import { getSessionFromRequest } from '../services/sessionService';
+import { isWorkspaceMember } from '../services/workspaceService';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
   return new Response(JSON.stringify(data), {
@@ -31,25 +32,39 @@ export const handleFormsRoutes = async (request: Request) => {
   const path = url.pathname;
   const isPublicPath = /\/public$/.test(path);
 
+  const session = getSessionFromRequest(request);
   if (!isPublicPath) {
-    const session = getSessionFromRequest(request);
     if (!session) {
       return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
     }
   }
 
   if (request.method === 'GET' && path === '/api/forms') {
-    return jsonResponse({ forms: listForms() });
+    const workspaceId = url.searchParams.get('workspaceId');
+    if (!workspaceId) {
+      return jsonResponse({ error: 'workspaceId is required.' }, { status: 400 });
+    }
+    if (!isWorkspaceMember(workspaceId, session?.pubkey ?? '')) {
+      return jsonResponse({ error: 'Not found.' }, { status: 404 });
+    }
+    return jsonResponse({ forms: listForms(workspaceId) });
   }
 
   if (request.method === 'POST' && path === '/api/forms') {
-    const payload = await readJson<{ title?: string; schema?: unknown }>(request);
+    const payload = await readJson<{ title?: string; schema?: unknown; workspaceId?: string }>(request);
     const title = payload?.title?.trim();
+    const workspaceId = payload?.workspaceId;
     if (!title) {
       return jsonResponse({ error: 'Title is required.' }, { status: 400 });
     }
+    if (!workspaceId) {
+      return jsonResponse({ error: 'workspaceId is required.' }, { status: 400 });
+    }
+    if (!isWorkspaceMember(workspaceId, session?.pubkey ?? '')) {
+      return jsonResponse({ error: 'Not found.' }, { status: 404 });
+    }
 
-    const created = createForm({ title, schema: payload?.schema ?? {} });
+    const created = createForm({ title, schema: payload?.schema ?? {}, workspaceId });
     return jsonResponse({ id: created.id });
   }
 

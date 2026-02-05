@@ -10,13 +10,14 @@ export interface FormRecord {
 }
 
 const insertForm = db.prepare(
-  'INSERT INTO forms (id, title, schema_json, created_at, updated_at, published) VALUES (?, ?, ?, ?, ?, ?)'
+  'INSERT INTO forms (id, title, schema_json, created_at, updated_at, published, workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
 );
 const selectForms = db.prepare(
   `
   SELECT f.id, f.title, f.created_at, f.updated_at, f.published,
          (SELECT COUNT(*) FROM responses r WHERE r.form_id = f.id) as responses_count
   FROM forms f
+  WHERE f.workspace_id = ?
   ORDER BY f.updated_at DESC
   `
 );
@@ -31,8 +32,8 @@ const publishForm = db.prepare(
   'UPDATE forms SET published = 1, updated_at = ? WHERE id = ?'
 );
 
-export const listForms = () => {
-  return selectForms.all() as Array<
+export const listForms = (workspaceId: string) => {
+  return selectForms.all(workspaceId) as Array<
     Pick<FormRecord, 'id' | 'title' | 'created_at' | 'updated_at' | 'published'> & {
       responses_count: number;
     }
@@ -49,12 +50,12 @@ export const formExists = (id: string) => {
   return Boolean(row?.exists_flag);
 };
 
-export const createForm = (input: { title: string; schema: unknown }) => {
+export const createForm = (input: { title: string; schema: unknown; workspaceId: string }) => {
   const id = crypto.randomUUID();
   const now = Date.now();
   const schemaJson = JSON.stringify(input.schema ?? {});
 
-  insertForm.run(id, input.title, schemaJson, now, now, 0);
+  insertForm.run(id, input.title, schemaJson, now, now, 0, input.workspaceId);
 
   return { id, created_at: now, updated_at: now, published: 0 };
 };

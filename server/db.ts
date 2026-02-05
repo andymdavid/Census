@@ -18,7 +18,30 @@ db.exec(`
     schema_json TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    published INTEGER NOT NULL DEFAULT 0
+    published INTEGER NOT NULL DEFAULT 0,
+    workspace_id TEXT NOT NULL DEFAULT ''
+  );
+`);
+
+try {
+  db.exec(\"ALTER TABLE forms ADD COLUMN workspace_id TEXT NOT NULL DEFAULT '';\");
+} catch {}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS workspaces (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS workspace_members (
+    workspace_id TEXT NOT NULL,
+    pubkey TEXT NOT NULL,
+    role TEXT NOT NULL,
+    created_at INTEGER NOT NULL
   );
 `);
 
