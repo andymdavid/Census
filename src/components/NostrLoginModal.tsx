@@ -27,7 +27,7 @@ const NostrLoginModal: React.FC<NostrLoginModalProps> = ({ onSuccess }) => {
   }, [bunkerUrl]);
 
   const fetchChallenge = async () => {
-    const nonceResponse = await fetch('/api/auth/nonce', { method: 'POST' });
+    const nonceResponse = await fetch('/api/auth/nonce', { method: 'POST', credentials: 'include' });
     if (!nonceResponse.ok) {
       throw new Error('Failed to get challenge.');
     }
@@ -37,6 +37,7 @@ const NostrLoginModal: React.FC<NostrLoginModalProps> = ({ onSuccess }) => {
   const verifyWithServer = async (signedEvent: unknown) => {
     const verifyResponse = await fetch('/api/auth/verify', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
       },

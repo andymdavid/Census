@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ChevronDown, LayoutGrid, Plus, Search } from 'lucide-react';
+import { nip19 } from 'nostr-tools';
 import type { FormSchemaV0 } from '../types/formSchema';
 
 interface FormListItem {
@@ -138,7 +139,7 @@ const Forms: React.FC = () => {
     const load = async () => {
       try {
         const [meResponse, workspacesResponse] = await Promise.all([
-          fetch('/api/auth/me'),
+          fetch('/api/auth/me', { credentials: 'include' }),
           fetch('/api/workspaces'),
         ]);
         if (!workspacesResponse.ok) {
@@ -161,8 +162,11 @@ const Forms: React.FC = () => {
         if (meResponse.ok) {
           const meData = (await meResponse.json()) as { pubkey?: string; npub?: string };
           if (isMounted) {
-            setPubkey(meData.pubkey ?? null);
-            setNpub(meData.npub ?? null);
+            const nextPubkey = meData.pubkey ?? null;
+            const nextNpub =
+              meData.npub ?? (nextPubkey ? nip19.npubEncode(nextPubkey) : null);
+            setPubkey(nextPubkey);
+            setNpub(nextNpub);
           }
         }
       } catch (err) {
@@ -313,7 +317,9 @@ const Forms: React.FC = () => {
                 className="w-64 rounded-xl bg-white p-4 shadow-xl border border-gray-100"
               >
                 <div className="text-sm font-semibold text-gray-800">Profile</div>
-                <div className="text-xs text-gray-500 mt-1 break-all">{npub ?? 'Unknown user'}</div>
+                <div className="text-xs text-gray-500 mt-1 break-all">
+                  {npub ?? (pubkey ? `${pubkey.slice(0, 12)}…` : 'Unknown user')}
+                </div>
                 {activeWorkspace && (
                   <div className="text-xs text-gray-400 mt-3">
                     Workspace: <span className="text-gray-600">{activeWorkspace.name}</span>
