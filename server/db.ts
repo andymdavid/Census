@@ -24,7 +24,7 @@ db.exec(`
 `);
 
 try {
-  db.exec(\"ALTER TABLE forms ADD COLUMN workspace_id TEXT NOT NULL DEFAULT '';\");
+  db.exec("ALTER TABLE forms ADD COLUMN workspace_id TEXT NOT NULL DEFAULT '';");
 } catch {}
 
 db.exec(`

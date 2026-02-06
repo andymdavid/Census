@@ -132,6 +132,7 @@ const Forms: React.FC = () => {
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
   const [workspaceName, setWorkspaceName] = useState('');
   const [npub, setNpub] = useState<string | null>(null);
+  const [workspacesOpen, setWorkspacesOpen] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -227,7 +228,9 @@ const Forms: React.FC = () => {
     const loadForms = async () => {
       if (!activeWorkspaceId) return;
       try {
-        const response = await fetch(`/api/forms?workspaceId=${activeWorkspaceId}`);
+        const response = await fetch(`/api/forms?workspaceId=${activeWorkspaceId}`, {
+          credentials: 'include',
+        });
         if (!response.ok) {
           throw new Error('Failed to load forms.');
         }
@@ -519,26 +522,34 @@ const Forms: React.FC = () => {
                     </Dialog.Portal>
                   </Dialog.Root>
                 </div>
-                <div className="flex items-center justify-between text-sm text-gray-500">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100"
+                  onClick={() => setWorkspacesOpen((prev) => !prev)}
+                >
                   <span>Private</span>
-                  <ChevronDown className="h-4 w-4" />
-                </div>
-                {workspaces.map((workspace) => (
-                  <button
-                    key={workspace.id}
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${workspacesOpen ? '' : '-rotate-90'}`}
+                  />
+                </button>
+                {workspacesOpen &&
+                  workspaces.map((workspace) => (
+                    <button
+                      key={workspace.id}
                     className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
                       workspace.id === activeWorkspaceId
-                        ? 'bg-gray-100 text-gray-700'
+                        ? 'text-gray-700'
                         : 'text-gray-500 hover:bg-gray-100'
                     }`}
-                    onClick={() => {
-                      setActiveWorkspaceId(workspace.id);
-                      localStorage.setItem('outform.activeWorkspaceId', workspace.id);
-                    }}
-                  >
-                    <span>{workspace.name}</span>
-                  </button>
-                ))}
+                    style={workspace.id === activeWorkspaceId ? { backgroundColor: '#ededee' } : undefined}
+                      onClick={() => {
+                        setActiveWorkspaceId(workspace.id);
+                        localStorage.setItem('outform.activeWorkspaceId', workspace.id);
+                      }}
+                    >
+                      <span>{workspace.name}</span>
+                    </button>
+                  ))}
               </div>
 
             </aside>
