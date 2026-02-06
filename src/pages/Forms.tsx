@@ -140,8 +140,17 @@ const Forms: React.FC = () => {
       try {
         const [meResponse, workspacesResponse] = await Promise.all([
           fetch('/api/auth/me', { credentials: 'include' }),
-          fetch('/api/workspaces'),
+          fetch('/api/workspaces', { credentials: 'include' }),
         ]);
+        if (isMounted) {
+          if (meResponse.ok) {
+            const meData = (await meResponse.json()) as { pubkey?: string; npub?: string };
+            const nextPubkey = meData.pubkey ?? null;
+            const nextNpub = meData.npub ?? (nextPubkey ? nip19.npubEncode(nextPubkey) : null);
+            setPubkey(nextPubkey);
+            setNpub(nextNpub);
+          }
+        }
         if (!workspacesResponse.ok) {
           throw new Error('Failed to load workspaces.');
         }
@@ -157,16 +166,6 @@ const Forms: React.FC = () => {
           setActiveWorkspaceId(nextId);
           if (nextId) {
             localStorage.setItem('outform.activeWorkspaceId', nextId);
-          }
-        }
-        if (meResponse.ok) {
-          const meData = (await meResponse.json()) as { pubkey?: string; npub?: string };
-          if (isMounted) {
-            const nextPubkey = meData.pubkey ?? null;
-            const nextNpub =
-              meData.npub ?? (nextPubkey ? nip19.npubEncode(nextPubkey) : null);
-            setPubkey(nextPubkey);
-            setNpub(nextNpub);
           }
         }
       } catch (err) {
