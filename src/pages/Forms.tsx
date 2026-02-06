@@ -419,10 +419,7 @@ const Forms: React.FC = () => {
     <div className="min-h-screen bg-white flex flex-col">
       <header className="h-14 px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-semibold">
-            OS
-          </div>
-          <div className="text-sm font-medium text-gray-700">{workspaceLabel}</div>
+          <div className="text-[20px] text-gray-800 of-logo-text">Census</div>
         </div>
         <div className="flex items-center gap-3">
           <DropdownMenu.Root>
@@ -669,6 +666,14 @@ const Forms: React.FC = () => {
                   ))}
               </div>
 
+              <div className="mt-auto pt-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-lg bg-gray-900 text-white flex items-center justify-center text-xs font-semibold">
+                    OS
+                  </div>
+                  <div className="text-sm font-medium text-gray-700">{workspaceLabel}</div>
+                </div>
+              </div>
             </aside>
 
             <main className="flex-1 flex flex-col">

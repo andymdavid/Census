@@ -1,10 +1,10 @@
+/* Import Google Fonts - Inter + Knewave */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Knewave&display=swap');
+
 /* Import Tailwind CSS */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Import Google Fonts - Inter */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* Global styles */
 :root {
@@ -41,6 +41,12 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden; /* Prevent horizontal scroll during transitions */
+}
+
+.of-logo-text {
+  font-family: 'Knewave', cursive;
+  font-weight: 400;
+  letter-spacing: 0.2px;
 }
 
 /* Custom utility classes */
