@@ -72,12 +72,8 @@ export const handleWorkspacesRoutes = async (request: Request) => {
 
   if (match && request.method === 'PUT') {
     const workspaceId = match[1];
-    const role = getWorkspaceMemberRole(workspaceId, session.pubkey);
-    if (!role) {
+    if (!isWorkspaceMember(workspaceId, session.pubkey)) {
       return jsonResponse({ error: 'Not found' }, { status: 404 });
-    }
-    if (role !== 'owner') {
-      return jsonResponse({ error: 'Forbidden' }, { status: 403 });
     }
     const payload = await readJson<{ name?: string }>(request);
     const name = payload?.name?.trim();
