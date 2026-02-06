@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, LayoutGrid, Plus, Search } from 'lucide-react';
+import { Calendar, ChevronDown, LayoutGrid, Plus, Search, UserPlus } from 'lucide-react';
 import { nip19 } from 'nostr-tools';
 import type { FormSchemaV0 } from '../types/formSchema';
 
@@ -137,6 +137,7 @@ const Forms: React.FC = () => {
   const [renameWorkspaceOpen, setRenameWorkspaceOpen] = useState(false);
   const [deleteWorkspaceOpen, setDeleteWorkspaceOpen] = useState(false);
   const [workspaceRenameValue, setWorkspaceRenameValue] = useState('');
+  const [sortBy, setSortBy] = useState<'created' | 'updated' | 'alpha'>('created');
 
   useEffect(() => {
     let isMounted = true;
@@ -262,6 +263,27 @@ const Forms: React.FC = () => {
     return forms.filter((form) => form.title.toLowerCase().includes(lowered));
   }, [forms, query]);
 
+  const sortedForms = useMemo(() => {
+    const next = [...filteredForms];
+    if (sortBy === 'updated') {
+      next.sort((a, b) => (Number(b.updated_at) || 0) - (Number(a.updated_at) || 0));
+      return next;
+    }
+    if (sortBy === 'alpha') {
+      next.sort((a, b) => a.title.localeCompare(b.title));
+      return next;
+    }
+    next.sort((a, b) => (Number(b.created_at) || 0) - (Number(a.created_at) || 0));
+    return next;
+  }, [filteredForms, sortBy]);
+
+  const sortLabel =
+    sortBy === 'updated' ? 'Last updated' : sortBy === 'alpha' ? 'Alphabetical' : 'Date created';
+
+  const applySort = (next: 'created' | 'updated' | 'alpha') => {
+    setSortBy(next);
+  };
+
   const createForm = async (schema: FormSchemaV0, title: string) => {
     setCreating(true);
     try {
@@ -386,7 +408,7 @@ const Forms: React.FC = () => {
                   </div>
                 )}
                 <button
-                  className="mt-4 w-full text-sm text-gray-600 hover:text-gray-800 border border-gray-200 rounded-lg px-3 py-2"
+                  className="mt-4 w-full text-sm text-gray-600 hover:text-gray-800 border border-gray-200 rounded-xl px-3 py-2"
                   onClick={() => {
                     fetch('/api/auth/logout', { method: 'POST' }).finally(() => window.location.reload());
                   }}
@@ -427,7 +449,7 @@ const Forms: React.FC = () => {
                           Pick a template or question type.
                         </Dialog.Description>
                       </div>
-                      <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-full border border-gray-200">
+                      <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-xl border border-gray-200">
                         Close
                       </Dialog.Close>
                     </div>
@@ -504,7 +526,7 @@ const Forms: React.FC = () => {
                   </div>
                   <Dialog.Root open={workspaceModalOpen} onOpenChange={setWorkspaceModalOpen}>
                     <Dialog.Trigger asChild>
-                      <button className="h-8 w-8 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center">
+                      <button className="h-8 w-8 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-700 flex items-center justify-center">
                         <Plus className="h-4 w-4" />
                       </button>
                     </Dialog.Trigger>
@@ -520,7 +542,7 @@ const Forms: React.FC = () => {
                               Create a workspace to organize your forms.
                             </Dialog.Description>
                           </div>
-                          <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-full border border-gray-200">
+                          <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-xl border border-gray-200">
                             Close
                           </Dialog.Close>
                         </div>
@@ -581,7 +603,7 @@ const Forms: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm text-gray-500 hover:bg-gray-100"
+                  className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-sm text-gray-500 hover:bg-gray-100"
                   onClick={() => setWorkspacesOpen((prev) => !prev)}
                 >
                   <span>Private</span>
@@ -593,7 +615,7 @@ const Forms: React.FC = () => {
                   workspaces.map((workspace) => (
                     <button
                       key={workspace.id}
-                    className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
+                    className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-sm ${
                       workspace.id === activeWorkspaceId
                         ? 'text-gray-700'
                         : 'text-gray-500 hover:bg-gray-100'
@@ -649,14 +671,50 @@ const Forms: React.FC = () => {
                         </DropdownMenu.Content>
                       </DropdownMenu.Portal>
                     </DropdownMenu.Root>
-                    <button className="text-xs text-gray-600 border border-gray-200 rounded-full px-3 py-1">
-                      Invite
-                    </button>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button className="text-xs text-gray-600 border border-gray-200 rounded-md px-3 py-1">
-                      Date created
+                    <button className="h-[30px] text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl px-3 inline-flex items-center gap-2 transition">
+                      <UserPlus className="h-3.5 w-3.5 text-gray-500" />
+                      Invite
                     </button>
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger asChild>
+                        <button className="h-[30px] text-xs text-gray-600 border border-gray-200 rounded-xl px-3 inline-flex items-center gap-2 bg-white hover:bg-[#ededee] transition">
+                          <Calendar className="h-3.5 w-3.5 text-gray-500" />
+                          {sortLabel}
+                          <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                        </button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content
+                          sideOffset={6}
+                          align="end"
+                          className="w-44 rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden"
+                        >
+                          <DropdownMenu.Item
+                            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                            onSelect={() => applySort('created')}
+                            onClick={() => applySort('created')}
+                          >
+                            Date created
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                            onSelect={() => applySort('updated')}
+                            onClick={() => applySort('updated')}
+                          >
+                            Last updated
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                            onSelect={() => applySort('alpha')}
+                            onClick={() => applySort('alpha')}
+                          >
+                            Alphabetical
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
                     <div
                       className="flex items-center gap-2 rounded-xl px-3"
                       style={{ height: '30px', backgroundColor: '#f0f0f0', border: '1px solid #f0f0f0' }}
@@ -693,10 +751,10 @@ const Forms: React.FC = () => {
 
                   {!loading && !error && (
                     <div className="space-y-3 px-6 pb-6">
-                      {filteredForms.length === 0 && (
+                      {sortedForms.length === 0 && (
                         <div className="text-gray-500 px-2 py-6">No forms found.</div>
                       )}
-                      {filteredForms.map((form) => {
+                      {sortedForms.map((form) => {
                         const funnel = funnelStats[form.id];
                         const completionRate = funnel?.totalStarts
                           ? Math.round((funnel.completions / funnel.totalStarts) * 100)
@@ -773,7 +831,7 @@ const Forms: React.FC = () => {
                     </div>
                     <button
                       type="button"
-                      className="mt-4 inline-flex items-center rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:border-gray-300"
+                      className="mt-4 inline-flex items-center rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:border-gray-300"
                       onClick={() => setWorkspaceModalOpen(true)}
                     >
                       Create workspace
