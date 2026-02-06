@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Calendar, ChevronDown, LayoutGrid, Plus, Search, UserPlus } from 'lucide-react';
-import { nip19 } from 'nostr-tools';
+import { nip19, SimplePool } from 'nostr-tools';
 import type { FormSchemaV0 } from '../types/formSchema';
 
 interface FormListItem {
@@ -143,6 +143,9 @@ const Forms: React.FC = () => {
   const [workspaceMembers, setWorkspaceMembers] = useState<
     Array<{ pubkey: string; role: string; created_at: number }>
   >([]);
+  const [profileName, setProfileName] = useState<string | null>(null);
+  const [profilePicture, setProfilePicture] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -290,6 +293,42 @@ const Forms: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!pubkey) {
+      setProfileName(null);
+      setProfilePicture(null);
+      return;
+    }
+    let isActive = true;
+    const pool = new SimplePool();
+    const relays = ['wss://relay.damus.io', 'wss://relay.nostr.band', 'wss://nos.lol'];
+    (async () => {
+      try {
+        const event = await pool.get(relays, { kinds: [0], authors: [pubkey] }, { maxWait: 4000 });
+        if (!isActive || !event?.content) return;
+        const metadata = JSON.parse(event.content) as {
+          name?: string;
+          display_name?: string;
+          picture?: string;
+        };
+        const nextName = metadata.display_name || metadata.name || null;
+        const nextPicture = metadata.picture || null;
+        setProfileName(nextName);
+        setProfilePicture(nextPicture);
+      } catch {
+        if (!isActive) return;
+        setProfileName(null);
+        setProfilePicture(null);
+      } finally {
+        pool.close(relays);
+      }
+    })();
+    return () => {
+      isActive = false;
+      pool.close(relays);
+    };
+  }, [pubkey]);
+
+  useEffect(() => {
     if (!inviteOpen || !activeWorkspaceId) return;
     loadWorkspaceMembers(activeWorkspaceId);
   }, [inviteOpen, activeWorkspaceId]);
@@ -361,6 +400,18 @@ const Forms: React.FC = () => {
   const avatarLabel = pubkey ? pubkey.slice(0, 2).toUpperCase() : 'OF';
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   const workspaceLabel = activeWorkspace?.name ?? 'Workspace';
+  const shortNpub = npub ? `${npub.slice(0, 10)}…${npub.slice(-4)}` : null;
+
+  const handleCopyNpub = async () => {
+    if (!npub) return;
+    try {
+      await navigator.clipboard.writeText(npub);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   const setActiveWorkspace = (nextId: string | null) => {
     setActiveWorkspaceId(nextId);
@@ -424,8 +475,12 @@ const Forms: React.FC = () => {
         <div className="flex items-center gap-3">
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
-              <button className="h-9 w-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold">
-                {avatarLabel}
+              <button className="h-9 w-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-semibold overflow-hidden">
+                {profilePicture ? (
+                  <img src={profilePicture} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  avatarLabel
+                )}
               </button>
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
@@ -435,9 +490,17 @@ const Forms: React.FC = () => {
                 className="w-64 rounded-xl bg-white p-4 shadow-xl border border-gray-100"
               >
                 <div className="text-sm font-semibold text-gray-800">Profile</div>
-                <div className="text-xs text-gray-500 mt-1 break-all">
-                  {npub ?? (pubkey ? `${pubkey.slice(0, 12)}…` : 'Unknown user')}
+                <div className="text-sm font-semibold text-gray-800 mt-2">
+                  {profileName ?? 'Unknown user'}
                 </div>
+                <button
+                  type="button"
+                  className="text-xs text-gray-500 mt-1 break-all hover:text-gray-700"
+                  onClick={handleCopyNpub}
+                >
+                  {shortNpub ?? (pubkey ? `${pubkey.slice(0, 12)}…` : 'Unknown user')}
+                  {copied ? ' • Copied' : ''}
+                </button>
                 {activeWorkspace && (
                   <div className="text-xs text-gray-400 mt-3">
                     Workspace: <span className="text-gray-600">{activeWorkspace.name}</span>
