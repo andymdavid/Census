@@ -1,6 +1,5 @@
 import {
   createForm,
-  formExists,
   getFormById,
   listForms,
   publishFormById,
@@ -100,6 +99,9 @@ export const handleFormsRoutes = async (request: Request) => {
       if (!form) {
         return jsonResponse({ error: 'Form not found.' }, { status: 404 });
       }
+      if (!isWorkspaceMember(form.workspace_id, session?.pubkey ?? '')) {
+        return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+      }
 
       let schema: unknown = {};
       try {
@@ -119,7 +121,11 @@ export const handleFormsRoutes = async (request: Request) => {
     }
 
     if (request.method === 'PUT') {
-      if (!formExists(formId)) {
+      const form = getFormById(formId);
+      if (!form) {
+        return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+      }
+      if (!isWorkspaceMember(form.workspace_id, session?.pubkey ?? '')) {
         return jsonResponse({ error: 'Form not found.' }, { status: 404 });
       }
 
@@ -137,7 +143,11 @@ export const handleFormsRoutes = async (request: Request) => {
   const publishMatch = path.match(/^\/api\/forms\/([^/]+)\/publish$/);
   if (publishMatch && request.method === 'POST') {
     const formId = publishMatch[1];
-    if (!formExists(formId)) {
+    const form = getFormById(formId);
+    if (!form) {
+      return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+    }
+    if (!isWorkspaceMember(form.workspace_id, session?.pubkey ?? '')) {
       return jsonResponse({ error: 'Form not found.' }, { status: 404 });
     }
     publishFormById(formId);

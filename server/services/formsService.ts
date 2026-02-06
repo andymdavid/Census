@@ -7,6 +7,7 @@ export interface FormRecord {
   created_at: number;
   updated_at: number;
   published: number;
+  workspace_id: string;
 }
 
 const insertForm = db.prepare(
@@ -22,7 +23,7 @@ const selectForms = db.prepare(
   `
 );
 const selectFormById = db.prepare(
-  'SELECT id, title, schema_json, created_at, updated_at, published FROM forms WHERE id = ?'
+  'SELECT id, title, schema_json, created_at, updated_at, published, workspace_id FROM forms WHERE id = ?'
 );
 const selectFormExists = db.prepare('SELECT 1 as exists_flag FROM forms WHERE id = ? LIMIT 1');
 const updateForm = db.prepare(

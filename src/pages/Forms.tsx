@@ -293,6 +293,7 @@ const Forms: React.FC = () => {
 
   const avatarLabel = pubkey ? pubkey.slice(0, 2).toUpperCase() : 'OF';
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
+  const workspaceLabel = activeWorkspace?.name ?? 'Workspace';
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -301,7 +302,7 @@ const Forms: React.FC = () => {
           <div className="h-8 w-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-semibold">
             OS
           </div>
-          <div className="text-sm font-medium text-gray-700">Other Stuff</div>
+          <div className="text-sm font-medium text-gray-700">{workspaceLabel}</div>
         </div>
         <div className="flex items-center gap-3">
           <DropdownMenu.Root>
@@ -547,7 +548,7 @@ const Forms: React.FC = () => {
               <div className="px-6 pt-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-semibold text-gray-800">My workspace</h2>
+                    <h2 className="text-xl font-semibold text-gray-800">{workspaceLabel}</h2>
                     <button className="text-gray-400 hover:text-gray-600">···</button>
                     <button className="text-xs text-gray-600 border border-gray-200 rounded-full px-3 py-1">
                       Invite
@@ -575,85 +576,109 @@ const Forms: React.FC = () => {
                 </div>
               </div>
 
-              <div className="-ml-72 w-[calc(100%+18rem)] h-0.5 bg-white/80 mb-4" />
+              {activeWorkspaceId && (
+                <>
+                  <div className="-ml-72 w-[calc(100%+18rem)] h-0.5 bg-white/80 mb-4" />
 
-              <div className="grid grid-cols-[1fr_120px_120px_140px_80px] text-xs text-gray-400 px-6 py-2">
-                <div>Forms</div>
-                <div>Responses</div>
-                <div>Completion</div>
-                <div>Updated</div>
-                <div className="text-right">Actions</div>
-              </div>
+                  <div className="grid grid-cols-[1fr_120px_120px_140px_80px] text-xs text-gray-400 px-6 py-2">
+                    <div>Forms</div>
+                    <div>Responses</div>
+                    <div>Completion</div>
+                    <div>Updated</div>
+                    <div className="text-right">Actions</div>
+                  </div>
 
-              {loading && <div className="text-gray-500 px-6 py-6">Loading...</div>}
-              {error && <div className="text-red-600 px-6 py-6">{error}</div>}
+                  {loading && <div className="text-gray-500 px-6 py-6">Loading...</div>}
+                  {error && <div className="text-red-600 px-6 py-6">{error}</div>}
 
-              {!loading && !error && (
-                <div className="space-y-3 px-6 pb-6">
-                  {filteredForms.length === 0 && (
-                    <div className="text-gray-500 px-2 py-6">No forms found.</div>
-                  )}
-                  {filteredForms.map((form) => {
-                    const funnel = funnelStats[form.id];
-                    const completionRate = funnel?.totalStarts
-                      ? Math.round((funnel.completions / funnel.totalStarts) * 100)
-                      : 0;
-                    return (
-                      <div
-                        key={form.id}
-                        className="bg-white border border-gray-200 rounded-xl px-4 py-3 grid grid-cols-[1fr_120px_120px_140px_80px] items-center hover:border-primary/40 hover:shadow-sm transition"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-lg bg-emerald-700/80 text-white text-xs font-semibold flex items-center justify-center">
-                            OF
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-gray-800">{form.title}</div>
-                            <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
-                              <span
-                                className={`of-badge ${
-                                  form.published
-                                    ? 'bg-emerald-100 text-emerald-700'
-                                    : 'bg-gray-100 text-gray-600'
-                                }`}
+                  {!loading && !error && (
+                    <div className="space-y-3 px-6 pb-6">
+                      {filteredForms.length === 0 && (
+                        <div className="text-gray-500 px-2 py-6">No forms found.</div>
+                      )}
+                      {filteredForms.map((form) => {
+                        const funnel = funnelStats[form.id];
+                        const completionRate = funnel?.totalStarts
+                          ? Math.round((funnel.completions / funnel.totalStarts) * 100)
+                          : 0;
+                        return (
+                          <div
+                            key={form.id}
+                            className="bg-white border border-gray-200 rounded-xl px-4 py-3 grid grid-cols-[1fr_120px_120px_140px_80px] items-center hover:border-primary/40 hover:shadow-sm transition"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-lg bg-emerald-700/80 text-white text-xs font-semibold flex items-center justify-center">
+                                OF
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium text-gray-800">{form.title}</div>
+                                <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                                  <span
+                                    className={`of-badge ${
+                                      form.published
+                                        ? 'bg-emerald-100 text-emerald-700'
+                                        : 'bg-gray-100 text-gray-600'
+                                    }`}
+                                  >
+                                    {form.published ? 'Published' : 'Draft'}
+                                  </span>
+                                  <span className="of-pill">{form.responses_count ?? 0} responses</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-sm text-gray-600">{form.responses_count ?? 0}</div>
+                            <div className="text-sm text-gray-600">{completionRate}%</div>
+                            <div className="text-sm text-gray-600">
+                              {new Date(form.updated_at).toLocaleDateString()}
+                            </div>
+                            <div className="flex items-center justify-end gap-3 text-sm">
+                              <Link
+                                to={`/forms/${form.id}/edit`}
+                                className="text-gray-600 hover:text-gray-800"
                               >
-                                {form.published ? 'Published' : 'Draft'}
-                              </span>
-                              <span className="of-pill">{form.responses_count ?? 0} responses</span>
+                                Edit
+                              </Link>
+                              <Link
+                                to={`/forms/${form.id}/analytics`}
+                                className="text-gray-600 hover:text-gray-800"
+                              >
+                                Analytics
+                              </Link>
+                              <Link
+                                to={`/f/${form.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-gray-600 hover:text-gray-800"
+                              >
+                                Share
+                              </Link>
+                              <button className="text-gray-400 hover:text-gray-600">···</button>
                             </div>
                           </div>
-                        </div>
-                        <div className="text-sm text-gray-600">{form.responses_count ?? 0}</div>
-                        <div className="text-sm text-gray-600">{completionRate}%</div>
-                        <div className="text-sm text-gray-600">
-                          {new Date(form.updated_at).toLocaleDateString()}
-                        </div>
-                        <div className="flex items-center justify-end gap-3 text-sm">
-                          <Link
-                            to={`/forms/${form.id}/edit`}
-                            className="text-gray-600 hover:text-gray-800"
-                          >
-                            Edit
-                          </Link>
-                          <Link
-                            to={`/forms/${form.id}/analytics`}
-                            className="text-gray-600 hover:text-gray-800"
-                          >
-                            Analytics
-                          </Link>
-                          <Link
-                            to={`/f/${form.id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-gray-600 hover:text-gray-800"
-                          >
-                            Share
-                          </Link>
-                          <button className="text-gray-400 hover:text-gray-600">···</button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!loading && !error && !activeWorkspaceId && (
+                <div className="px-6 pb-6">
+                  <div className="bg-white border border-gray-200 rounded-xl p-6">
+                    <div className="text-base font-semibold text-gray-800">
+                      Create your first workspace
+                    </div>
+                    <div className="text-sm text-gray-500 mt-2">
+                      Workspaces keep forms and responses organized.
+                    </div>
+                    <button
+                      type="button"
+                      className="mt-4 inline-flex items-center rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:border-gray-300"
+                      onClick={() => setWorkspaceModalOpen(true)}
+                    >
+                      Create workspace
+                    </button>
+                  </div>
                 </div>
               )}
             </main>
