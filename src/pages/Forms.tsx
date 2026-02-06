@@ -576,9 +576,10 @@ const Forms: React.FC = () => {
                 </div>
               </div>
 
+              <div className="-ml-72 w-[calc(100%+18rem)] h-0.5 bg-white/80 mb-4" />
+
               {activeWorkspaceId && (
                 <>
-                  <div className="-ml-72 w-[calc(100%+18rem)] h-0.5 bg-white/80 mb-4" />
 
                   <div className="grid grid-cols-[1fr_120px_120px_140px_80px] text-xs text-gray-400 px-6 py-2">
                     <div>Forms</div>
