@@ -77,7 +77,7 @@ const handler = async (request: Request, server: Server) => {
   return jsonResponse({ error: 'Not found' }, { status: 404 });
 };
 
-const port = Number(process.env.PORT ?? 3001);
+const port = Number(process.env.PORT ?? 3002);
 
 let server: Server;
 
