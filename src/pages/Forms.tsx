@@ -138,6 +138,11 @@ const Forms: React.FC = () => {
   const [deleteWorkspaceOpen, setDeleteWorkspaceOpen] = useState(false);
   const [workspaceRenameValue, setWorkspaceRenameValue] = useState('');
   const [sortBy, setSortBy] = useState<'created' | 'updated' | 'alpha'>('created');
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteValue, setInviteValue] = useState('');
+  const [workspaceMembers, setWorkspaceMembers] = useState<
+    Array<{ pubkey: string; role: string; created_at: number }>
+  >([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -282,6 +287,40 @@ const Forms: React.FC = () => {
 
   const applySort = (next: 'created' | 'updated' | 'alpha') => {
     setSortBy(next);
+  };
+
+  useEffect(() => {
+    if (!inviteOpen || !activeWorkspaceId) return;
+    loadWorkspaceMembers(activeWorkspaceId);
+  }, [inviteOpen, activeWorkspaceId]);
+
+  const loadWorkspaceMembers = async (workspaceId: string) => {
+    const response = await fetch(`/api/workspaces/${workspaceId}/members`, {
+      credentials: 'include',
+    });
+    if (!response.ok) return;
+    const data = (await response.json()) as {
+      members?: Array<{ pubkey: string; role: string; created_at: number }>;
+    };
+    setWorkspaceMembers(data.members ?? []);
+  };
+
+  const handleInvite = async () => {
+    if (!activeWorkspaceId) return;
+    const payload = inviteValue.trim();
+    if (!payload) return;
+    const response = await fetch(`/api/workspaces/${activeWorkspaceId}/invite`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pubkey: payload }),
+    });
+    if (!response.ok) return;
+    const data = (await response.json()) as {
+      members?: Array<{ pubkey: string; role: string; created_at: number }>;
+    };
+    setWorkspaceMembers(data.members ?? []);
+    setInviteValue('');
   };
 
   const createForm = async (schema: FormSchemaV0, title: string) => {
@@ -673,7 +712,10 @@ const Forms: React.FC = () => {
                     </DropdownMenu.Root>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button className="h-[30px] text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl px-3 inline-flex items-center gap-2 transition">
+                    <button
+                      className="h-[30px] text-xs text-gray-600 border border-gray-200 rounded-xl px-3 inline-flex items-center gap-2 bg-white hover:bg-[#ededee] transition"
+                      onClick={() => setInviteOpen(true)}
+                    >
                       <UserPlus className="h-3.5 w-3.5 text-gray-500" />
                       Invite
                     </button>
@@ -897,6 +939,82 @@ const Forms: React.FC = () => {
               >
                 Delete
               </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={inviteOpen} onOpenChange={setInviteOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-8 shadow-2xl focus:outline-none">
+            <div className="flex items-start justify-between">
+              <div>
+                <Dialog.Title className="text-xl font-semibold text-gray-900">
+                  Invite to workspace
+                </Dialog.Title>
+                <Dialog.Description className="text-sm text-gray-500 mt-2">
+                  Add members to {workspaceLabel}.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-2 py-1">
+                ✕
+              </Dialog.Close>
+            </div>
+
+            <div className="mt-6">
+              <label className="text-xs uppercase tracking-wide text-gray-400">
+                Nostr npub or pubkey
+              </label>
+              <div className="mt-2 flex items-center gap-3">
+                <input
+                  type="text"
+                  value={inviteValue}
+                  onChange={(event) => setInviteValue(event.target.value)}
+                  placeholder="npub1... or 64-char pubkey"
+                  className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  className="h-[40px] px-4 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-100"
+                  onClick={handleInvite}
+                >
+                  Invite
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 border border-gray-200 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-gray-50 text-xs uppercase tracking-wide text-gray-400">
+                <span>Members</span>
+                <span>{workspaceMembers.length}</span>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {workspaceMembers.map((member) => {
+                  const npub =
+                    member.pubkey && member.pubkey.length === 64
+                      ? nip19.npubEncode(member.pubkey)
+                      : member.pubkey;
+                  const shortNpub = npub ? `${npub.slice(0, 10)}…${npub.slice(-4)}` : 'Unknown';
+                  return (
+                    <div key={member.pubkey} className="px-4 py-3 flex items-center justify-between">
+                      <div className="text-sm text-gray-700">{shortNpub}</div>
+                      <div className="text-xs text-gray-400 uppercase tracking-wide">
+                        {member.role}
+                      </div>
+                    </div>
+                  );
+                })}
+                {workspaceMembers.length === 0 && (
+                  <div className="px-4 py-4 text-sm text-gray-500">No members yet.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <Dialog.Close className="text-sm text-gray-600 hover:text-gray-800">
+                Close
+              </Dialog.Close>
             </div>
           </Dialog.Content>
         </Dialog.Portal>

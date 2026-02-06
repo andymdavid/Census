@@ -1,4 +1,5 @@
 import db from '../db';
+import { nip19 } from 'nostr-tools';
 
 export interface WorkspaceRecord {
   id: string;
@@ -28,6 +29,9 @@ const selectWorkspacesForUser = db.prepare(
 const selectMembership = db.prepare(
   'SELECT workspace_id, pubkey, role FROM workspace_members WHERE workspace_id = ? AND pubkey = ?'
 );
+const selectMembers = db.prepare(
+  'SELECT workspace_id, pubkey, role, created_at FROM workspace_members WHERE workspace_id = ? ORDER BY created_at ASC'
+);
 const selectMemberCount = db.prepare(
   'SELECT COUNT(*) as member_count FROM workspace_members WHERE workspace_id = ?'
 );
@@ -42,6 +46,9 @@ const updateFormsWorkspace = db.prepare(
 );
 const updateFormsWorkspaceById = db.prepare(
   'UPDATE forms SET workspace_id = ? WHERE workspace_id = ?'
+);
+const insertMemberIfMissing = db.prepare(
+  'INSERT OR IGNORE INTO workspace_members (workspace_id, pubkey, role, created_at) VALUES (?, ?, ?, ?)'
 );
 
 export const listWorkspacesForUser = (pubkey: string) => {
@@ -89,6 +96,37 @@ export const renameWorkspace = (workspaceId: string, name: string) => {
   const now = Date.now();
   updateWorkspace.run(name, now, workspaceId);
   return { updated_at: now };
+};
+
+export const listWorkspaceMembers = (workspaceId: string) => {
+  return selectMembers.all(workspaceId) as Array<{
+    workspace_id: string;
+    pubkey: string;
+    role: string;
+    created_at: number;
+  }>;
+};
+
+export const normalizePubkey = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('npub')) {
+    try {
+      const decoded = nip19.decode(trimmed);
+      if (decoded.type === 'npub' && typeof decoded.data === 'string') {
+        return decoded.data;
+      }
+    } catch {
+      return null;
+    }
+  }
+  return /^[0-9a-f]{64}$/i.test(trimmed) ? trimmed : null;
+};
+
+export const addWorkspaceMember = (workspaceId: string, pubkey: string, role = 'member') => {
+  const now = Date.now();
+  insertMemberIfMissing.run(workspaceId, pubkey, role, now);
+  return listWorkspaceMembers(workspaceId);
 };
 
 export const removeWorkspaceMember = (workspaceId: string, pubkey: string) => {

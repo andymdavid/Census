@@ -4,7 +4,10 @@ import {
   getWorkspaceById,
   getWorkspaceMemberRole,
   isWorkspaceMember,
+  listWorkspaceMembers,
   listWorkspacesForUser,
+  normalizePubkey,
+  addWorkspaceMember,
   removeWorkspaceMember,
   ensureDefaultWorkspace,
   renameWorkspace,
@@ -108,6 +111,30 @@ export const handleWorkspacesRoutes = async (request: Request) => {
       deleteWorkspace(workspaceId);
     }
     return jsonResponse({ ok: true });
+  }
+
+  const membersMatch = path.match(/^\/api\/workspaces\/([^/]+)\/members$/);
+  if (membersMatch && request.method === 'GET') {
+    const workspaceId = membersMatch[1];
+    if (!isWorkspaceMember(workspaceId, session.pubkey)) {
+      return jsonResponse({ error: 'Not found' }, { status: 404 });
+    }
+    return jsonResponse({ members: listWorkspaceMembers(workspaceId) });
+  }
+
+  const inviteMatch = path.match(/^\/api\/workspaces\/([^/]+)\/invite$/);
+  if (inviteMatch && request.method === 'POST') {
+    const workspaceId = inviteMatch[1];
+    if (!isWorkspaceMember(workspaceId, session.pubkey)) {
+      return jsonResponse({ error: 'Not found' }, { status: 404 });
+    }
+    const payload = await readJson<{ pubkey?: string }>(request);
+    const normalized = normalizePubkey(payload?.pubkey ?? '');
+    if (!normalized) {
+      return jsonResponse({ error: 'Invalid pubkey.' }, { status: 400 });
+    }
+    const members = addWorkspaceMember(workspaceId, normalized);
+    return jsonResponse({ members });
   }
 
   return jsonResponse({ error: 'Not found' }, { status: 404 });
