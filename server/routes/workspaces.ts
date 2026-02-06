@@ -3,6 +3,7 @@ import {
   getWorkspaceById,
   isWorkspaceMember,
   listWorkspacesForUser,
+  ensureDefaultWorkspace,
 } from '../services/workspaceService';
 import { getSessionFromRequest } from '../services/sessionService';
 
@@ -34,7 +35,12 @@ export const handleWorkspacesRoutes = async (request: Request) => {
   const path = url.pathname;
 
   if (request.method === 'GET' && path === '/api/workspaces') {
-    return jsonResponse({ workspaces: listWorkspacesForUser(session.pubkey) });
+    const workspaces = listWorkspacesForUser(session.pubkey);
+    if (workspaces.length === 0) {
+      ensureDefaultWorkspace(session.pubkey);
+      return jsonResponse({ workspaces: listWorkspacesForUser(session.pubkey) });
+    }
+    return jsonResponse({ workspaces });
   }
 
   if (request.method === 'POST' && path === '/api/workspaces') {
