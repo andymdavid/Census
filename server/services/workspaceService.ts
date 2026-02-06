@@ -28,9 +28,20 @@ const selectWorkspacesForUser = db.prepare(
 const selectMembership = db.prepare(
   'SELECT workspace_id, pubkey, role FROM workspace_members WHERE workspace_id = ? AND pubkey = ?'
 );
+const selectMemberCount = db.prepare(
+  'SELECT COUNT(*) as member_count FROM workspace_members WHERE workspace_id = ?'
+);
+const deleteMember = db.prepare(
+  'DELETE FROM workspace_members WHERE workspace_id = ? AND pubkey = ?'
+);
+const deleteMembersByWorkspace = db.prepare('DELETE FROM workspace_members WHERE workspace_id = ?');
+const deleteWorkspaceById = db.prepare('DELETE FROM workspaces WHERE id = ?');
 const updateWorkspace = db.prepare('UPDATE workspaces SET name = ?, updated_at = ? WHERE id = ?');
 const updateFormsWorkspace = db.prepare(
   "UPDATE forms SET workspace_id = ? WHERE workspace_id = '' OR workspace_id IS NULL"
+);
+const updateFormsWorkspaceById = db.prepare(
+  'UPDATE forms SET workspace_id = ? WHERE workspace_id = ?'
 );
 
 export const listWorkspacesForUser = (pubkey: string) => {
@@ -67,8 +78,27 @@ export const isWorkspaceMember = (workspaceId: string, pubkey: string) => {
   return Boolean(row);
 };
 
+export const getWorkspaceMemberRole = (workspaceId: string, pubkey: string) => {
+  const row = selectMembership.get(workspaceId, pubkey) as
+    | { workspace_id: string; pubkey: string; role: string }
+    | undefined;
+  return row?.role ?? null;
+};
+
 export const renameWorkspace = (workspaceId: string, name: string) => {
   const now = Date.now();
   updateWorkspace.run(name, now, workspaceId);
   return { updated_at: now };
+};
+
+export const removeWorkspaceMember = (workspaceId: string, pubkey: string) => {
+  deleteMember.run(workspaceId, pubkey);
+  const countRow = selectMemberCount.get(workspaceId) as { member_count: number } | undefined;
+  return countRow?.member_count ?? 0;
+};
+
+export const deleteWorkspace = (workspaceId: string) => {
+  updateFormsWorkspaceById.run('', workspaceId);
+  deleteMembersByWorkspace.run(workspaceId);
+  deleteWorkspaceById.run(workspaceId);
 };

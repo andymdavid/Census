@@ -133,6 +133,10 @@ const Forms: React.FC = () => {
   const [workspaceName, setWorkspaceName] = useState('');
   const [npub, setNpub] = useState<string | null>(null);
   const [workspacesOpen, setWorkspacesOpen] = useState(true);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const [renameWorkspaceOpen, setRenameWorkspaceOpen] = useState(false);
+  const [deleteWorkspaceOpen, setDeleteWorkspaceOpen] = useState(false);
+  const [workspaceRenameValue, setWorkspaceRenameValue] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -296,6 +300,59 @@ const Forms: React.FC = () => {
   const avatarLabel = pubkey ? pubkey.slice(0, 2).toUpperCase() : 'OF';
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   const workspaceLabel = activeWorkspace?.name ?? 'Workspace';
+
+  const setActiveWorkspace = (nextId: string | null) => {
+    setActiveWorkspaceId(nextId);
+    if (nextId) {
+      localStorage.setItem('outform.activeWorkspaceId', nextId);
+    } else {
+      localStorage.removeItem('outform.activeWorkspaceId');
+    }
+  };
+
+  const handleRenameWorkspace = async () => {
+    if (!activeWorkspaceId) return;
+    const trimmed = workspaceRenameValue.trim();
+    if (!trimmed) return;
+    const response = await fetch(`/api/workspaces/${activeWorkspaceId}`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    if (!response.ok) return;
+    setWorkspaces((prev) =>
+      prev.map((workspace) =>
+        workspace.id === activeWorkspaceId ? { ...workspace, name: trimmed } : workspace
+      )
+    );
+    setRenameWorkspaceOpen(false);
+  };
+
+  const handleLeaveWorkspace = async () => {
+    if (!activeWorkspaceId) return;
+    const response = await fetch(`/api/workspaces/${activeWorkspaceId}/leave`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!response.ok) return;
+    setWorkspaces((prev) => prev.filter((workspace) => workspace.id !== activeWorkspaceId));
+    const nextId = workspaces.find((workspace) => workspace.id !== activeWorkspaceId)?.id ?? null;
+    setActiveWorkspace(nextId);
+  };
+
+  const handleDeleteWorkspace = async () => {
+    if (!activeWorkspaceId) return;
+    const response = await fetch(`/api/workspaces/${activeWorkspaceId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!response.ok) return;
+    setWorkspaces((prev) => prev.filter((workspace) => workspace.id !== activeWorkspaceId));
+    const nextId = workspaces.find((workspace) => workspace.id !== activeWorkspaceId)?.id ?? null;
+    setActiveWorkspace(nextId);
+    setDeleteWorkspaceOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -494,6 +551,7 @@ const Forms: React.FC = () => {
                                 if (!trimmed) return;
                                 const response = await fetch('/api/workspaces', {
                                   method: 'POST',
+                                  credentials: 'include',
                                   headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify({ name: trimmed }),
                                 });
@@ -507,8 +565,7 @@ const Forms: React.FC = () => {
                                     updated_at: Date.now(),
                                   };
                                   setWorkspaces((prev) => [...prev, newWorkspace]);
-                                  setActiveWorkspaceId(data.id);
-                                  localStorage.setItem('outform.activeWorkspaceId', data.id);
+                                  setActiveWorkspace(data.id);
                                 }
                                 setWorkspaceName('');
                                 setWorkspaceModalOpen(false);
@@ -543,8 +600,7 @@ const Forms: React.FC = () => {
                     }`}
                     style={workspace.id === activeWorkspaceId ? { backgroundColor: '#ededee' } : undefined}
                       onClick={() => {
-                        setActiveWorkspaceId(workspace.id);
-                        localStorage.setItem('outform.activeWorkspaceId', workspace.id);
+                        setActiveWorkspace(workspace.id);
                       }}
                     >
                       <span>{workspace.name}</span>
@@ -559,7 +615,40 @@ const Forms: React.FC = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <h2 className="text-xl font-semibold text-gray-800">{workspaceLabel}</h2>
-                    <button className="text-gray-400 hover:text-gray-600">···</button>
+                    <DropdownMenu.Root open={workspaceMenuOpen} onOpenChange={setWorkspaceMenuOpen}>
+                      <DropdownMenu.Trigger asChild>
+                        <button className="text-gray-400 hover:text-gray-600">···</button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content
+                          sideOffset={8}
+                          align="start"
+                          className="w-40 rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden"
+                        >
+                          <DropdownMenu.Item
+                            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                            onSelect={() => {
+                              setWorkspaceRenameValue(activeWorkspace?.name ?? '');
+                              setRenameWorkspaceOpen(true);
+                            }}
+                          >
+                            Rename
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                            onSelect={handleLeaveWorkspace}
+                          >
+                            Leave
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            className="px-4 py-2 text-sm text-red-600 hover:bg-gray-100 cursor-pointer"
+                            onSelect={() => setDeleteWorkspaceOpen(true)}
+                          >
+                            Delete
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
                     <button className="text-xs text-gray-600 border border-gray-200 rounded-full px-3 py-1">
                       Invite
                     </button>
@@ -696,6 +785,64 @@ const Forms: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <Dialog.Root open={renameWorkspaceOpen} onOpenChange={setRenameWorkspaceOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl focus:outline-none">
+            <Dialog.Title className="text-lg font-semibold text-gray-900">
+              Rename workspace
+            </Dialog.Title>
+            <Dialog.Description className="text-sm text-gray-500 mt-2">
+              Update the workspace name.
+            </Dialog.Description>
+            <input
+              type="text"
+              value={workspaceRenameValue}
+              onChange={(event) => setWorkspaceRenameValue(event.target.value)}
+              className="mt-4 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <Dialog.Close className="text-sm text-gray-600 hover:text-gray-800 px-3 py-2">
+                Cancel
+              </Dialog.Close>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-xl bg-[#177767] text-white text-sm hover:bg-[#146957] transition"
+                onClick={handleRenameWorkspace}
+              >
+                Save
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={deleteWorkspaceOpen} onOpenChange={setDeleteWorkspaceOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl focus:outline-none">
+            <Dialog.Title className="text-lg font-semibold text-gray-900">
+              Delete workspace
+            </Dialog.Title>
+            <Dialog.Description className="text-sm text-gray-500 mt-2">
+              This removes the workspace and unassigns its forms.
+            </Dialog.Description>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <Dialog.Close className="text-sm text-gray-600 hover:text-gray-800 px-3 py-2">
+                Cancel
+              </Dialog.Close>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm hover:bg-red-700 transition"
+                onClick={handleDeleteWorkspace}
+              >
+                Delete
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 };

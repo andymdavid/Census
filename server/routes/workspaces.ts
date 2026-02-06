@@ -1,9 +1,13 @@
 import {
   createWorkspace,
+  deleteWorkspace,
   getWorkspaceById,
+  getWorkspaceMemberRole,
   isWorkspaceMember,
   listWorkspacesForUser,
+  removeWorkspaceMember,
   ensureDefaultWorkspace,
+  renameWorkspace,
 } from '../services/workspaceService';
 import { getSessionFromRequest } from '../services/sessionService';
 
@@ -64,6 +68,50 @@ export const handleWorkspacesRoutes = async (request: Request) => {
       return jsonResponse({ error: 'Not found' }, { status: 404 });
     }
     return jsonResponse({ workspace });
+  }
+
+  if (match && request.method === 'PUT') {
+    const workspaceId = match[1];
+    const role = getWorkspaceMemberRole(workspaceId, session.pubkey);
+    if (!role) {
+      return jsonResponse({ error: 'Not found' }, { status: 404 });
+    }
+    if (role !== 'owner') {
+      return jsonResponse({ error: 'Forbidden' }, { status: 403 });
+    }
+    const payload = await readJson<{ name?: string }>(request);
+    const name = payload?.name?.trim();
+    if (!name) {
+      return jsonResponse({ error: 'Name is required.' }, { status: 400 });
+    }
+    renameWorkspace(workspaceId, name);
+    return jsonResponse({ ok: true });
+  }
+
+  if (match && request.method === 'DELETE') {
+    const workspaceId = match[1];
+    const role = getWorkspaceMemberRole(workspaceId, session.pubkey);
+    if (!role) {
+      return jsonResponse({ error: 'Not found' }, { status: 404 });
+    }
+    if (role !== 'owner') {
+      return jsonResponse({ error: 'Forbidden' }, { status: 403 });
+    }
+    deleteWorkspace(workspaceId);
+    return jsonResponse({ ok: true });
+  }
+
+  const leaveMatch = path.match(/^\/api\/workspaces\/([^/]+)\/leave$/);
+  if (leaveMatch && request.method === 'POST') {
+    const workspaceId = leaveMatch[1];
+    if (!isWorkspaceMember(workspaceId, session.pubkey)) {
+      return jsonResponse({ error: 'Not found' }, { status: 404 });
+    }
+    const remaining = removeWorkspaceMember(workspaceId, session.pubkey);
+    if (remaining === 0) {
+      deleteWorkspace(workspaceId);
+    }
+    return jsonResponse({ ok: true });
   }
 
   return jsonResponse({ error: 'Not found' }, { status: 404 });
