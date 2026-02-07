@@ -22,12 +22,13 @@ export interface FormQuestion {
 export interface FormQuestionSettings {
   kind?: 'welcome' | 'end' | 'yesno' | 'multiple' | 'short' | 'long' | 'email' | 'number' | 'date';
   answerType?: 'multiple' | 'yesno' | 'short' | 'long' | 'email' | 'number' | 'date';
+  choices?: string[];
+  description?: string;
   required?: boolean;
   multipleSelection?: boolean;
-  randomize?: boolean;
   otherOption?: boolean;
-  verticalAlignment?: boolean;
-  mapToContacts?: boolean;
+  verticalAlignment?: 'left' | 'center';
+  mediaType?: 'image' | 'video';
   showTimeToComplete?: boolean;
   showSubmissionCount?: boolean;
   buttonLabel?: string;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Questions from './Questions';
 import type { FormQuestionSettings, FormSchemaV0 } from '../types/formSchema';
@@ -6,14 +6,18 @@ import type { LoadedFormSchema } from '../types/formSchema';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Switch from '@radix-ui/react-switch';
 import * as Dialog from '@radix-ui/react-dialog';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
   Calendar as CalendarIcon,
   CheckCircle,
+  ChevronDown,
+  ChevronUp,
   ChevronDown as ChevronDownIcon,
   FormInput,
   ListChecks,
   Mail,
   MessageSquareText,
+  MoreVertical,
   Palette,
   Text,
   TextCursorInput,
@@ -257,7 +261,7 @@ const Builder: React.FC = () => {
   const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<
     'form' | 'question' | 'branching' | 'theme' | 'results' | 'share'
-  >('form');
+  >('question');
   const [previewStep, setPreviewStep] = useState<'intro' | 'questions'>('intro');
   const [showShare, setShowShare] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -278,11 +282,9 @@ const Builder: React.FC = () => {
   const questionToggleSettings: { label: string; key: keyof FormQuestionSettings }[] = [
     { label: 'Required', key: 'required' },
     { label: 'Multiple selection', key: 'multipleSelection' },
-    { label: 'Randomize', key: 'randomize' },
     { label: '"Other" option', key: 'otherOption' },
-    { label: 'Vertical alignment', key: 'verticalAlignment' },
-    { label: 'Map to contacts', key: 'mapToContacts' },
   ];
+  const mediaInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedQuestion = schema.questions.find((question) => question.id === selectedQuestionId);
   const questionOptions = schema.questions.map((question) => question.id);
@@ -460,6 +462,26 @@ const Builder: React.FC = () => {
     }));
   };
 
+  const updateSelectedChoices = (updater: (choices: string[]) => string[]) => {
+    updateSelectedQuestionSettings((settings) => ({
+      ...settings,
+      choices: updater(settings.choices ?? ['Choice A']),
+    }));
+  };
+
+  const handleMediaUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      updateSelectedQuestionSettings((settings) => ({
+        ...settings,
+        mediaUrl: result,
+        mediaType: file.type.startsWith('video/') ? 'video' : 'image',
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const addQuestion = () => {
     const nextId = schema.questions.reduce((maxId, question) => Math.max(maxId, question.id), 0) + 1;
     const nextQuestion = {
@@ -594,7 +616,7 @@ const Builder: React.FC = () => {
     <Tabs.Root
       value={activeTab}
       onValueChange={(value) => setActiveTab(value as typeof activeTab)}
-      className="min-h-screen flex flex-col bg-white"
+      className="h-screen flex flex-col bg-white overflow-hidden"
     >
       <Dialog.Root open={templateModalOpen} onOpenChange={setTemplateModalOpen}>
         <Dialog.Portal>
@@ -702,9 +724,6 @@ const Builder: React.FC = () => {
         </div>
         <div className="flex-1 flex justify-center">
           <Tabs.List className="of-tabs-list">
-            <Tabs.Trigger className="of-tabs-trigger" value="form">
-              Form
-            </Tabs.Trigger>
             <Tabs.Trigger className="of-tabs-trigger" value="question">
               Question
             </Tabs.Trigger>
@@ -788,9 +807,9 @@ const Builder: React.FC = () => {
         </div>
       )}
 
-      <div className="flex-1 px-6 pb-6 flex" style={{ paddingTop: '0px' }}>
+      <div className="flex-1 px-6 pb-6 flex min-h-0" style={{ paddingTop: '0px' }}>
         <div className="rounded-2xl overflow-hidden flex-1 flex" style={{ backgroundColor: '#f7f7f8' }}>
-          <div className="flex flex-1 min-h-0">
+          <div className="flex flex-1 min-h-0 overflow-hidden">
             <aside className="w-72 p-4 border-r-2 border-white overflow-y-auto">
               <button
                 type="button"
@@ -820,40 +839,72 @@ const Builder: React.FC = () => {
                   setSelectedQuestionId(question.id);
                   setActiveTab('question');
                 }}
-                className={`w-full text-left border rounded-md p-3 transition ${
+                className={`w-full text-left rounded-xl px-3 py-2 transition ${
                   question.id === selectedQuestionId
-                    ? 'border-primary bg-primary/5'
-                    : 'border-gray-200 hover:border-primary/60'
+                    ? 'bg-[#ededee] text-gray-900'
+                    : 'bg-white/70 text-gray-700 hover:bg-white'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium text-gray-800">{label}</div>
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">{label}</div>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-400">
                     <button
                       type="button"
-                      className="hover:text-gray-600"
+                      className="hover:text-gray-600 disabled:text-gray-300"
                       disabled={index === 0}
                       onClick={(event) => {
                         event.stopPropagation();
                         moveQuestion(index, index - 1);
                       }}
+                      aria-label="Move up"
                     >
-                      Up
+                      <ChevronUp className="h-4 w-4" />
                     </button>
                     <button
                       type="button"
-                      className="hover:text-gray-600"
+                      className="hover:text-gray-600 disabled:text-gray-300"
                       disabled={index === schema.questions.length - 1}
                       onClick={(event) => {
                         event.stopPropagation();
                         moveQuestion(index, index + 1);
                       }}
+                      aria-label="Move down"
                     >
-                      Down
+                      <ChevronDown className="h-4 w-4" />
                     </button>
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger asChild>
+                        <button
+                          type="button"
+                          className="hover:text-gray-600"
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label="More actions"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content
+                          className="min-w-[140px] rounded-xl border border-gray-200 bg-white p-1 shadow-xl text-sm"
+                          sideOffset={8}
+                          align="end"
+                        >
+                          <DropdownMenu.Item
+                            className="cursor-pointer rounded-lg px-3 py-2 text-red-600 hover:bg-red-50 focus:bg-red-50 focus:outline-none"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeQuestion(question.id);
+                            }}
+                          >
+                            Delete
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
                   </div>
                 </div>
-                <div className="text-xs text-gray-500 mt-1 truncate">{question.text}</div>
               </button>
             );
             })}
@@ -918,6 +969,120 @@ const Builder: React.FC = () => {
                       </div>
                     )}
                   </div>
+                ) : selectedQuestion && !isSelectedWelcome && !isSelectedEnd ? (
+                  <div className="h-full flex flex-col justify-center px-16 py-12">
+                    <div
+                      className={`w-full flex ${
+                        selectedSettings.verticalAlignment === 'center'
+                          ? 'justify-center'
+                          : 'justify-start'
+                      }`}
+                    >
+                      <div className="w-fit max-w-[400px] flex flex-col items-start text-left">
+                      <div className="text-sm text-blue-600 font-medium mb-2 flex items-center gap-2 flex-nowrap">
+                        <span className="whitespace-nowrap min-w-[28px]">{selectedQuestion.id}</span>
+                        <span className="whitespace-nowrap">→</span>
+                        <input
+                          type="text"
+                          value={selectedQuestion.text}
+                          onChange={(event) =>
+                            updateQuestion(selectedQuestion.id, (question) => ({
+                              ...question,
+                              text: event.target.value,
+                            }))
+                          }
+                        className="text-gray-600 italic bg-transparent focus:outline-none w-full min-w-0"
+                        placeholder="Your question here. Recall information with @"
+                      />
+                        {selectedSettings.required && (
+                          <span className="text-red-500 font-semibold">*</span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={selectedSettings.description ?? ''}
+                        onChange={(event) =>
+                          updateSelectedQuestionSettings((settings) => ({
+                            ...settings,
+                            description: event.target.value,
+                          }))
+                        }
+                        className="text-sm text-gray-400 italic bg-transparent focus:outline-none w-[420px] mb-6"
+                        placeholder="Description (optional)"
+                      />
+
+                      {selectedSettings.mediaUrl && (
+                        <div className="mb-6">
+                          {selectedSettings.mediaType === 'video' ? (
+                            <video
+                              src={selectedSettings.mediaUrl}
+                              className="max-w-[520px] rounded-xl shadow-sm"
+                              controls
+                            />
+                          ) : (
+                            <img
+                              src={selectedSettings.mediaUrl}
+                              alt="Question media"
+                              className="max-w-[520px] rounded-xl shadow-sm"
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      {selectedSettings.answerType === 'multiple' ? (
+                        <div className="flex flex-col gap-3 w-full items-start">
+                          {[
+                            ...(selectedSettings.choices ?? ['Choice A']),
+                            ...(selectedSettings.otherOption ? ['Other'] : []),
+                          ].map((choice, idx) => (
+                            <div
+                              key={`preview-choice-${idx}`}
+                              className="flex items-center gap-3 w-full"
+                            >
+                              <div className="h-8 w-8 rounded-md border border-blue-300 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                                {String.fromCharCode(65 + idx)}
+                              </div>
+                              <input
+                                type="text"
+                                value={choice}
+                                onChange={(event) =>
+                                  updateSelectedChoices((choices) =>
+                                    choices.map((item, itemIdx) =>
+                                      itemIdx === idx ? event.target.value : item
+                                    )
+                                  )
+                                }
+                                className="min-w-[260px] rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-gray-700 focus:outline-none"
+                                disabled={
+                                  selectedSettings.otherOption &&
+                                  idx === (selectedSettings.choices ?? ['Choice A']).length
+                                }
+                              />
+                            </div>
+                          ))}
+                          <div className="w-full flex justify-start">
+                            <button
+                              type="button"
+                              className="text-blue-600 text-sm font-medium underline underline-offset-2"
+                              onClick={() =>
+                                updateSelectedChoices((choices) => [
+                                  ...choices,
+                                  `Choice ${String.fromCharCode(65 + choices.length)}`,
+                                ])
+                              }
+                            >
+                              Add choice
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="min-w-[280px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
+                          Answer
+                        </div>
+                      )}
+                      </div>
+                    </div>
+                  </div>
                 ) : schema.description?.trim() && previewStep === 'intro' ? (
                   <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12">
                     <h3 className="text-2xl font-semibold mb-4 text-gray-800">{schema.title}</h3>
@@ -944,68 +1109,83 @@ const Builder: React.FC = () => {
 
             <aside className="w-80 p-4 overflow-y-auto">
           <div className="of-tabs">
-            <Tabs.Content value="form">
-              <div className="space-y-4">
-                <div>
-                  <div className="text-sm font-medium text-gray-600 mb-2">Form settings</div>
-                  <label className="of-label">Description</label>
-                  <textarea
-                    value={schema.description ?? ''}
-                    onChange={(event) =>
-                      setSchema((prev) => ({ ...prev, description: event.target.value }))
-                    }
-                    rows={3}
-                    className="of-textarea"
-                  />
-                </div>
-              </div>
-            </Tabs.Content>
-
             <Tabs.Content value="question">
               <div className="space-y-4">
-                {selectedQuestion ? (
-                  <>
-                    <div>
-                      <label className="of-label">Screen type</label>
-                      <select
-                        value={isSelectedWelcome ? 'welcome' : isSelectedEnd ? 'end' : 'question'}
-                        onChange={(event) => {
-                          const nextType = event.target.value;
-                          if (nextType === 'question') {
-                            updateQuestion(selectedQuestion.id, (question) => ({
-                              ...question,
-                              category: question.category === 'Welcome Screen' || question.category === 'End Screen'
-                                ? 'General'
-                                : question.category,
-                              settings: {
-                                ...(question.settings ?? {}),
-                                kind: undefined,
-                              },
-                            }));
-                            return;
-                          }
-                          updateQuestion(selectedQuestion.id, (question) => ({
-                            ...question,
-                            category: nextType === 'welcome' ? 'Welcome Screen' : 'End Screen',
-                            settings: {
-                              ...(question.settings ?? {}),
-                              kind: nextType === 'welcome' ? 'welcome' : 'end',
-                              buttonLabel:
-                                (question.settings ?? {}).buttonLabel ??
-                                (nextType === 'welcome' ? 'Start' : 'Finish'),
-                            },
-                          }));
-                        }}
-                        className="of-input"
-                      >
+                <div>
+                  <label className="of-label">Screen type</label>
+                  <select
+                    value={
+                      selectedQuestion
+                        ? isSelectedWelcome
+                          ? 'welcome'
+                          : isSelectedEnd
+                            ? 'end'
+                            : 'question'
+                        : ''
+                    }
+                    onChange={(event) => {
+                      if (!selectedQuestion) return;
+                      const nextType = event.target.value;
+                      if (nextType === 'question') {
+                        updateQuestion(selectedQuestion.id, (question) => ({
+                          ...question,
+                          category:
+                            question.category === 'Welcome Screen' ||
+                            question.category === 'End Screen'
+                              ? 'General'
+                              : question.category,
+                          settings: {
+                            ...(question.settings ?? {}),
+                            kind: undefined,
+                          },
+                        }));
+                        return;
+                      }
+                      updateQuestion(selectedQuestion.id, (question) => ({
+                        ...question,
+                        category: nextType === 'welcome' ? 'Welcome Screen' : 'End Screen',
+                        settings: {
+                          ...(question.settings ?? {}),
+                          kind: nextType === 'welcome' ? 'welcome' : 'end',
+                          buttonLabel:
+                            (question.settings ?? {}).buttonLabel ??
+                            (nextType === 'welcome' ? 'Start' : 'Finish'),
+                        },
+                      }));
+                    }}
+                    className="of-input"
+                    disabled={!selectedQuestion}
+                  >
+                    {!selectedQuestion && <option value="">No screen selected</option>}
+                    {selectedQuestion && (
+                      <>
                         <option value="question">Question</option>
-                        <option value="welcome">Welcome Screen</option>
-                        <option value="end">End Screen</option>
-                      </select>
-                    </div>
+                        {schema.questions.some((q) => q.category === 'Welcome Screen') && (
+                          <option value="welcome">Welcome Screen</option>
+                        )}
+                        {schema.questions.some((q) => q.category === 'End Screen') && (
+                          <option value="end">End Screen</option>
+                        )}
+                      </>
+                    )}
+                  </select>
+                </div>
 
-                    <div className="-mx-4 h-0.5 bg-white/80" />
+                <div className="-mx-4 h-0.5 bg-white/80" />
 
+                {selectedQuestion && (
+                  <>
+                    <input
+                      ref={mediaInputRef}
+                      type="file"
+                      accept="image/*,video/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+                        handleMediaUpload(file);
+                      }}
+                    />
                     <div className="text-sm font-medium text-gray-600">Question properties</div>
 
                     {isSelectedWelcome || isSelectedEnd ? (
@@ -1064,55 +1244,19 @@ const Builder: React.FC = () => {
                           />
                         </div>
 
-                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                          <div className="text-sm text-gray-600">Image or video</div>
-                          <button
-                            type="button"
-                            className="h-8 w-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                          >
-                            +
-                          </button>
-                        </div>
-
+                      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                        <div className="text-sm text-gray-600">Image or video</div>
                         <button
                           type="button"
-                          className="text-xs text-red-600 hover:text-red-800"
-                          onClick={() => removeQuestion(selectedQuestion.id)}
+                          className="h-8 w-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                          onClick={() => mediaInputRef.current?.click()}
                         >
-                          Remove screen
+                          +
                         </button>
+                      </div>
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <div>
-                          <label className="of-label">Question text</label>
-                          <input
-                            type="text"
-                            value={selectedQuestion.text}
-                            onChange={(event) =>
-                              updateQuestion(selectedQuestion.id, (question) => ({
-                                ...question,
-                                text: event.target.value,
-                              }))
-                            }
-                            className="of-input"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            className="of-pill text-sm bg-gray-100 text-gray-700"
-                          >
-                            Text
-                          </button>
-                          <button
-                            type="button"
-                            className="of-pill text-sm text-gray-400 border border-gray-200"
-                          >
-                            Video
-                          </button>
-                        </div>
-
                         <div>
                           <label className="of-label">Answer</label>
                           <select
@@ -1157,28 +1301,38 @@ const Builder: React.FC = () => {
                           ))}
                         </div>
 
+                        <div>
+                          <label className="of-label">Vertical alignment</label>
+                          <select
+                          value={selectedSettings.verticalAlignment ?? 'left'}
+                          onChange={(event) =>
+                            updateSelectedQuestionSettings((settings) => ({
+                              ...settings,
+                              verticalAlignment: event.target.value as NonNullable<
+                                FormQuestionSettings['verticalAlignment']
+                              >,
+                            }))
+                          }
+                          className="of-input"
+                        >
+                          <option value="left">Left</option>
+                          <option value="center">Center</option>
+                        </select>
+                      </div>
+
                         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                           <div className="text-sm text-gray-600">Image or video</div>
                           <button
                             type="button"
                             className="h-8 w-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                            onClick={() => mediaInputRef.current?.click()}
                           >
                             +
                           </button>
                         </div>
-
-                        <button
-                          type="button"
-                          className="text-xs text-red-600 hover:text-red-800"
-                          onClick={() => removeQuestion(selectedQuestion.id)}
-                        >
-                          Remove question
-                        </button>
                       </div>
                     )}
                   </>
-                ) : (
-                  <div className="text-sm text-gray-500">Select a question to edit.</div>
                 )}
               </div>
             </Tabs.Content>

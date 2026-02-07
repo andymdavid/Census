@@ -53,8 +53,8 @@ const Questions: React.FC<QuestionsProps> = ({
   const [currentQuestionId, setCurrentQuestionId] = useState(
     questions[0]?.id ?? 0
   );
-  // State to track user answers (yes/no)
-  const [answers, setAnswers] = useState<Record<number, boolean>>({});
+  // State to track user answers
+  const [answers, setAnswers] = useState<Record<number, boolean | string | string[]>>({});
   // State to track history for branching
   const [history, setHistory] = useState<number[]>([]);
   // State to track direction of transition (forward/backward)
@@ -63,9 +63,15 @@ const Questions: React.FC<QuestionsProps> = ({
   const [showEnd, setShowEnd] = useState(false);
 
   // Handle answer selection
-  const computeScore = (answersSnapshot: Record<number, boolean>) => {
+  const hasAnswer = (value?: boolean | string | string[]) => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.trim().length > 0;
+    return Boolean(value);
+  };
+
+  const computeScore = (answersSnapshot: Record<number, boolean | string | string[]>) => {
     return questions.reduce((sum, question) => {
-      return answersSnapshot[question.id] ? sum + question.weight : sum;
+      return hasAnswer(answersSnapshot[question.id]) ? sum + question.weight : sum;
     }, 0);
   };
 
@@ -95,17 +101,26 @@ const Questions: React.FC<QuestionsProps> = ({
   };
 
   const submitResponse = async (
-    answersSnapshot: Record<number, boolean>,
+    answersSnapshot: Record<number, boolean | string | string[]>,
     finalScore: number
   ) => {
     if (!formId) return;
 
     const visitedIds = [...history, currentQuestionId];
     const payload = {
-      answers: visitedIds.map((questionId) => ({
-        questionId: String(questionId),
-        answer: answersSnapshot[questionId] ? 'yes' : 'no',
-      })),
+      answers: visitedIds.map((questionId) => {
+        const answer = answersSnapshot[questionId];
+        return {
+          questionId: String(questionId),
+          answer: Array.isArray(answer)
+            ? answer.join(', ')
+            : typeof answer === 'string'
+              ? answer
+              : answer
+                ? 'yes'
+                : 'no',
+        };
+      }),
       score: finalScore,
     };
 
@@ -126,25 +141,22 @@ const Questions: React.FC<QuestionsProps> = ({
     return null;
   };
 
-  const handleAnswer = async (answer: boolean) => {
-    const newAnswers = { ...answers, [currentQuestionId]: answer };
-    setAnswers(newAnswers);
-    const updatedScore = computeScore(newAnswers);
-
-    // Set direction to forward
+  const proceedToNext = async (
+    answersSnapshot: Record<number, boolean | string | string[]>,
+    answerBool: boolean
+  ) => {
+    const updatedScore = computeScore(answersSnapshot);
     setDirection(1);
+    const nextId = getNextQuestionId(currentQuestionId, answerBool);
 
-    const nextId = getNextQuestionId(currentQuestionId, answer);
-
-    // Move to next question or results page
     if (nextId !== null && questionMap.has(nextId)) {
       const nextHistory = [...history, currentQuestionId];
       const visitedIds = new Set([...nextHistory, nextId]);
-      const trimmedAnswers: Record<number, boolean> = {};
-      for (const [key, value] of Object.entries(newAnswers)) {
+      const trimmedAnswers: Record<number, boolean | string | string[]> = {};
+      for (const [key, value] of Object.entries(answersSnapshot)) {
         const numericKey = Number(key);
         if (visitedIds.has(numericKey)) {
-          trimmedAnswers[numericKey] = value;
+          trimmedAnswers[numericKey] = value as boolean | string | string[];
         }
       }
 
@@ -152,17 +164,21 @@ const Questions: React.FC<QuestionsProps> = ({
       setAnswers(trimmedAnswers);
       setCurrentQuestionId(nextId);
     } else {
-      const responseId = await submitResponse(newAnswers, updatedScore);
+      const responseId = await submitResponse(answersSnapshot, updatedScore);
       if (onComplete) {
         onComplete(updatedScore);
       } else if (endScreen) {
         setShowEnd(true);
       } else {
-        // Navigate to results page with the final score
-        // Use the updated score directly to ensure the last question's score is included
         navigate('/results', { state: { score: updatedScore, form, formId, responseId } });
       }
     }
+  };
+
+  const handleAnswer = async (answer: boolean) => {
+    const newAnswers = { ...answers, [currentQuestionId]: answer };
+    setAnswers(newAnswers);
+    await proceedToNext(newAnswers, answer);
   };
 
   // Handle going back to previous question
@@ -179,11 +195,41 @@ const Questions: React.FC<QuestionsProps> = ({
     }
   };
 
+  const handleMultipleSelect = (option: string) => {
+    const current = answers[currentQuestionId];
+    const currentQuestion = questionMap.get(currentQuestionId);
+    const currentList = Array.isArray(current)
+      ? current
+      : typeof current === 'string'
+        ? [current]
+        : [];
+    const allowMultiple = Boolean(currentQuestion?.settings?.multipleSelection);
+    const nextList = allowMultiple
+      ? currentList.includes(option)
+        ? currentList.filter((item) => item !== option)
+        : [...currentList, option]
+      : [option];
+    setAnswers((prev) => ({ ...prev, [currentQuestionId]: allowMultiple ? nextList : option }));
+    if (!allowMultiple) {
+      void proceedToNext({ ...answers, [currentQuestionId]: option }, true);
+    }
+  };
+
   const question = questionMap.get(currentQuestionId) ?? questions[0];
   const currentIndexRaw = questions.findIndex((item) => item.id === question?.id);
   const currentIndex = currentIndexRaw === -1 ? 0 : currentIndexRaw;
   const currentStep = history.length + 1;
   const score = computeScore(answers);
+  const answerType = question?.settings?.answerType ?? 'yesno';
+  const isRequired = Boolean(question?.settings?.required);
+  const currentAnswer = answers[currentQuestionId];
+  const canContinue = !isRequired || hasAnswer(currentAnswer);
+  const choiceList = [
+    ...(question?.settings?.choices ?? ['Choice A']),
+    ...(question?.settings?.otherOption ? ['Other'] : []),
+  ];
+  const blockJustifyClass =
+    question?.settings?.verticalAlignment === 'center' ? 'justify-center' : 'justify-start';
 
   // Animation variants for Framer Motion
   const pageVariants = {
@@ -379,48 +425,124 @@ const Questions: React.FC<QuestionsProps> = ({
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="flex flex-col items-center w-full"
+            className="flex flex-col w-full"
           >
-            {/* Category label - small and above question */}
-            <motion.div 
-              variants={itemVariants}
-              className="typeform-category"
-            >
-              {question.category}
-            </motion.div>
-
-            {/* Question - larger and more prominent */}
-            <motion.h2 
-              variants={itemVariants}
-              className="typeform-question"
-            >
-              {question.text}
-            </motion.h2>
-
-            {/* Answer buttons - better spacing */}
-            <motion.div 
-              variants={itemVariants}
-              className="typeform-options"
-            >
-              <motion.button
-                onClick={() => handleAnswer(true)}
-                className="typeform-option-button typeform-option-yes"
-                variants={buttonVariants}
-                whileHover="hover"
-                whileTap="tap"
+            <div className={`w-full flex ${blockJustifyClass}`}>
+              <div className="w-fit max-w-[400px] flex flex-col items-start text-left">
+              {/* Category label - small and above question */}
+              <motion.div 
+                variants={itemVariants}
+                className="typeform-category"
               >
-                Yes
-              </motion.button>
-              <motion.button
-                onClick={() => handleAnswer(false)}
-                className="typeform-option-button typeform-option-no"
-                variants={buttonVariants}
-                whileHover="hover"
-                whileTap="tap"
+                {question.category}
+              </motion.div>
+
+              {/* Question - larger and more prominent */}
+              <motion.h2 
+                variants={itemVariants}
+                className="typeform-question text-left mx-0"
               >
-                No
-              </motion.button>
-            </motion.div>
+                {question.text}
+                {isRequired && <span className="text-red-500 ml-1">*</span>}
+              </motion.h2>
+
+              {question.settings?.description && (
+                <motion.p variants={itemVariants} className="typeform-text text-left mx-0">
+                  {question.settings.description}
+                </motion.p>
+              )}
+
+              {question.settings?.mediaUrl && (
+                <motion.div variants={itemVariants} className="mb-6">
+                  {question.settings.mediaType === 'video' ? (
+                    <video
+                      src={question.settings.mediaUrl}
+                      className="max-w-[520px] rounded-xl shadow-sm"
+                      controls
+                    />
+                  ) : (
+                    <img
+                      src={question.settings.mediaUrl}
+                      alt="Question media"
+                      className="max-w-[520px] rounded-xl shadow-sm"
+                    />
+                  )}
+                </motion.div>
+              )}
+
+              {/* Answer buttons - better spacing */}
+              {answerType === 'multiple' ? (
+                <motion.div
+                  variants={itemVariants}
+                  className="flex flex-col gap-3 w-full max-w-xl items-start"
+                >
+                  {choiceList.map((choice) => {
+                    const selected = Array.isArray(currentAnswer)
+                      ? currentAnswer.includes(choice)
+                      : currentAnswer === choice;
+                    return (
+                      <motion.button
+                        key={choice}
+                        onClick={() => handleMultipleSelect(choice)}
+                        className={`typeform-option-button ${
+                          selected ? 'typeform-option-yes' : 'typeform-option-no'
+                        }`}
+                        variants={buttonVariants}
+                        whileHover="hover"
+                        whileTap="tap"
+                      >
+                        {choice}
+                      </motion.button>
+                    );
+                  })}
+                  {question.settings?.multipleSelection && (
+                    <motion.button
+                      onClick={() => {
+                        if (!canContinue) return;
+                        void proceedToNext(
+                          { ...answers, [currentQuestionId]: currentAnswer ?? [] },
+                          hasAnswer(currentAnswer)
+                        );
+                      }}
+                      className={`typeform-option-button ${
+                        canContinue ? 'typeform-option-yes' : 'typeform-option-no'
+                      }`}
+                      variants={buttonVariants}
+                      whileHover={canContinue ? 'hover' : undefined}
+                      whileTap={canContinue ? 'tap' : undefined}
+                      disabled={!canContinue}
+                    >
+                      Continue
+                    </motion.button>
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div 
+                  variants={itemVariants}
+                  className="typeform-options"
+                >
+                  <motion.button
+                    onClick={() => handleAnswer(true)}
+                    className="typeform-option-button typeform-option-yes"
+                    variants={buttonVariants}
+                    whileHover="hover"
+                    whileTap="tap"
+                  >
+                    Yes
+                  </motion.button>
+                  <motion.button
+                    onClick={() => handleAnswer(false)}
+                    className="typeform-option-button typeform-option-no"
+                    variants={buttonVariants}
+                    whileHover="hover"
+                    whileTap="tap"
+                  >
+                    No
+                  </motion.button>
+                </motion.div>
+              )}
+              </div>
+            </div>
 
             {/* Back button - only show if not on first question */}
             {history.length > 0 && (
