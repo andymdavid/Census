@@ -33,6 +33,14 @@ const publishForm = db.prepare(
   'UPDATE forms SET published = 1, updated_at = ? WHERE id = ?'
 );
 const deleteForm = db.prepare('DELETE FROM forms WHERE id = ?');
+const deleteResponsesByForm = db.prepare('DELETE FROM responses WHERE form_id = ?');
+const deleteAnswersByForm = db.prepare(
+  'DELETE FROM answers WHERE response_id IN (SELECT id FROM responses WHERE form_id = ?)'
+);
+const deleteLeadsByForm = db.prepare('DELETE FROM leads WHERE form_id = ?');
+const deleteLeadsByResponses = db.prepare(
+  'DELETE FROM leads WHERE response_id IN (SELECT id FROM responses WHERE form_id = ?)'
+);
 
 export const listForms = (workspaceId: string) => {
   return selectForms.all(workspaceId) as Array<
@@ -76,5 +84,11 @@ export const publishFormById = (id: string) => {
 };
 
 export const deleteFormById = (id: string) => {
-  deleteForm.run(id);
+  db.transaction(() => {
+    deleteAnswersByForm.run(id);
+    deleteLeadsByResponses.run(id);
+    deleteResponsesByForm.run(id);
+    deleteLeadsByForm.run(id);
+    deleteForm.run(id);
+  })();
 };
