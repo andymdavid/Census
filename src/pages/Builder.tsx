@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Questions from './Questions';
 import type { FormSchemaV0 } from '../types/formSchema';
 import type { LoadedFormSchema } from '../types/formSchema';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Switch from '@radix-ui/react-switch';
+import * as Dialog from '@radix-ui/react-dialog';
 
 const defaultTheme = {
   primaryColor: '#4f46e5',
@@ -23,6 +24,88 @@ const emptySchema: FormSchemaV0 = {
   results: [],
   theme: defaultTheme,
 };
+
+const baseResults = [
+  {
+    label: 'Low',
+    description: 'Low risk or low score.',
+    maxScore: 50,
+  },
+  {
+    label: 'High',
+    description: 'High risk or high score.',
+    minScore: 50,
+  },
+];
+
+const createSchema = (overrides: Partial<FormSchemaV0> = {}): FormSchemaV0 => {
+  return {
+    version: 'v0',
+    id: 'new-form',
+    title: overrides.title ?? 'Untitled Form',
+    description: overrides.description ?? '',
+    questions: overrides.questions ?? [],
+    results: overrides.results ?? baseResults,
+    theme: overrides.theme ?? defaultTheme,
+  };
+};
+
+const templateSchemas = [
+  {
+    key: 'blank',
+    label: 'Blank Form',
+    schema: createSchema({ title: 'Blank Form' }),
+  },
+  {
+    key: 'assessment',
+    label: 'Assessment',
+    schema: createSchema({
+      title: 'Assessment',
+      description: 'Answer a few quick questions to get your score.',
+      questions: [
+        { id: 1, text: 'Is this a yes/no assessment question?', weight: 10, category: 'Assessment' },
+      ],
+      results: [
+        {
+          label: 'Low Score',
+          description: 'Your score indicates low risk or impact.',
+          maxScore: 50,
+        },
+        {
+          label: 'High Score',
+          description: 'Your score indicates higher risk or impact.',
+          minScore: 50,
+        },
+      ],
+    }),
+  },
+  {
+    key: 'lead',
+    label: 'Lead Capture',
+    schema: createSchema({
+      title: 'Lead Capture',
+      description: 'Collect quick lead details.',
+      questions: [
+        { id: 1, text: 'Would you like a demo?', weight: 0, category: 'Lead' },
+      ],
+    }),
+  },
+];
+
+const questionTypeTemplates = [
+  { key: 'yesno', label: 'Yes/No', questionText: 'Yes/No question', category: 'Yes/No' },
+  {
+    key: 'mc',
+    label: 'Multiple Choice',
+    questionText: 'Multiple choice question',
+    category: 'Multiple Choice',
+  },
+  { key: 'short', label: 'Short Text', questionText: 'Short answer question', category: 'Short Text' },
+  { key: 'long', label: 'Long Text', questionText: 'Long answer question', category: 'Long Text' },
+  { key: 'email', label: 'Email', questionText: 'Email address', category: 'Email' },
+  { key: 'number', label: 'Number', questionText: 'Number question', category: 'Number' },
+  { key: 'date', label: 'Date', questionText: 'Date question', category: 'Date' },
+];
 
 const validateSchema = (schema: FormSchemaV0) => {
   const errors: string[] = [];
@@ -83,7 +166,9 @@ const getNextId = (schema: FormSchemaV0, id: number) => {
 const Builder: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const isNew = !id || id === 'new';
+  const [templateModalOpen, setTemplateModalOpen] = useState(isNew);
 
   const [title, setTitle] = useState('');
   const [schema, setSchema] = useState<FormSchemaV0>(emptySchema);
@@ -93,6 +178,7 @@ const Builder: React.FC = () => {
   const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
   const [previewStep, setPreviewStep] = useState<'intro' | 'questions'>('intro');
   const [showShare, setShowShare] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const origin =
     typeof window !== 'undefined' ? window.location.origin : 'https://example.com';
@@ -157,6 +243,50 @@ const Builder: React.FC = () => {
       isMounted = false;
     };
   }, [id, isNew]);
+
+  useEffect(() => {
+    if (isNew) {
+      setTemplateModalOpen(true);
+    }
+  }, [isNew]);
+
+  const createForm = async (schemaInput: FormSchemaV0, formTitle: string) => {
+    const params = new URLSearchParams(location.search);
+    const workspaceId = params.get('workspaceId');
+    if (!workspaceId) {
+      setError('Workspace is required to create a form.');
+      setStatus('error');
+      return;
+    }
+    setCreating(true);
+    try {
+      const response = await fetch('/api/forms', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: formTitle,
+          schema: { ...schemaInput, title: formTitle },
+          workspaceId,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to create form.');
+      }
+      const data = (await response.json()) as { id?: string };
+      if (data.id) {
+        setTemplateModalOpen(false);
+        navigate(`/forms/${data.id}/edit`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to create form.');
+      setStatus('error');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   useEffect(() => {
     if (!schema.questions.length) {
@@ -313,10 +443,92 @@ const Builder: React.FC = () => {
     : undefined;
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
-      <div className="border-b border-gray-200 px-6 py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div className="text-xs text-gray-400">Builder</div>
+    <Tabs.Root defaultValue="form" className="min-h-screen flex flex-col bg-white">
+      <Dialog.Root open={templateModalOpen} onOpenChange={setTemplateModalOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-7 shadow-2xl focus:outline-none">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <Dialog.Title className="text-2xl font-semibold text-gray-900">
+                  Create new form
+                </Dialog.Title>
+                <Dialog.Description className="text-sm text-gray-500 mt-1">
+                  Pick a template or question type.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-xl border border-gray-200">
+                Close
+              </Dialog.Close>
+            </div>
+
+            <div className="space-y-7">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-gray-400 mb-3">
+                  Templates
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {templateSchemas.map((template) => (
+                    <button
+                      key={template.key}
+                      type="button"
+                      className="of-card p-4 text-left hover:border-primary/60 hover:shadow-md transition"
+                      onClick={() => createForm(template.schema, template.schema.title)}
+                      disabled={creating}
+                    >
+                      <div className="text-sm font-medium text-gray-800">{template.label}</div>
+                      <div className="text-xs text-gray-500 mt-1 leading-relaxed">
+                        Start with {template.label.toLowerCase()}.
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs uppercase tracking-wide text-gray-400 mb-3">
+                  Question types
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  {questionTypeTemplates.map((template) => (
+                    <button
+                      key={template.key}
+                      type="button"
+                      className="of-card p-3 text-left hover:border-primary/60 hover:shadow-md transition"
+                      onClick={() =>
+                        createForm(
+                          createSchema({
+                            title: template.label,
+                            questions: [
+                              {
+                                id: 1,
+                                text: template.questionText,
+                                weight: 0,
+                                category: template.category,
+                              },
+                            ],
+                          }),
+                          template.label
+                        )
+                      }
+                      disabled={creating}
+                    >
+                      <div className="text-sm font-medium text-gray-800">{template.label}</div>
+                      <div className="text-xs text-gray-500 mt-1">Add a starter question.</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {creating && <div className="text-sm text-gray-500">Creating form...</div>}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+      <div className="h-14 px-6 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-[260px]">
+          <div className="text-[20px] text-gray-800 of-logo-text">Census</div>
+          <div className="text-sm text-gray-300">|</div>
           <input
             type="text"
             value={title}
@@ -324,18 +536,40 @@ const Builder: React.FC = () => {
               setTitle(event.target.value);
               setSchema((prev) => ({ ...prev, title: event.target.value }));
             }}
-            className="text-2xl font-semibold text-gray-800 focus:outline-none"
+            className="text-base font-semibold text-gray-800 focus:outline-none"
             placeholder="Untitled form"
           />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="text-sm text-gray-500">
+        <div className="flex-1 flex justify-center">
+          <Tabs.List className="of-tabs-list">
+            <Tabs.Trigger className="of-tabs-trigger" value="form">
+              Form
+            </Tabs.Trigger>
+            <Tabs.Trigger className="of-tabs-trigger" value="question">
+              Question
+            </Tabs.Trigger>
+            <Tabs.Trigger className="of-tabs-trigger" value="branching">
+              Branching
+            </Tabs.Trigger>
+            <Tabs.Trigger className="of-tabs-trigger" value="theme">
+              Theme
+            </Tabs.Trigger>
+            <Tabs.Trigger className="of-tabs-trigger" value="results">
+              Results
+            </Tabs.Trigger>
+            <Tabs.Trigger className="of-tabs-trigger" value="share">
+              Share
+            </Tabs.Trigger>
+          </Tabs.List>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-gray-500">
             Status: {published ? 'Published' : 'Draft'}
           </div>
           <button
             type="button"
             onClick={handlePublish}
-            className="text-sm font-medium text-primary hover:text-primary/80 disabled:text-gray-400"
+            className="h-[30px] text-xs text-gray-600 border border-gray-200 rounded-xl px-3 inline-flex items-center bg-white hover:bg-[#ededee] transition disabled:text-gray-400"
             disabled={isNew || published || status === 'saving'}
           >
             {published ? 'Published' : 'Publish'}
@@ -343,14 +577,14 @@ const Builder: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowShare((prev) => !prev)}
-            className="text-sm font-medium text-gray-600 hover:text-gray-800"
+            className="h-[30px] text-xs text-gray-600 border border-gray-200 rounded-xl px-3 inline-flex items-center bg-white hover:bg-[#ededee] transition"
           >
             Share
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="typeform-button"
+            className="h-[30px] text-xs text-white rounded-xl px-3 inline-flex items-center bg-[#177767] hover:bg-[#146957] transition"
             disabled={status === 'saving'}
           >
             {status === 'saving' ? 'Saving...' : 'Save'}
@@ -394,8 +628,10 @@ const Builder: React.FC = () => {
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0">
-        <aside className="w-72 border-r border-gray-200 p-4 overflow-y-auto">
+      <div className="flex-1 px-6 pb-6 flex" style={{ paddingTop: '0px' }}>
+        <div className="rounded-2xl overflow-hidden flex-1 flex" style={{ backgroundColor: '#f7f7f8' }}>
+          <div className="flex flex-1 min-h-0">
+            <aside className="w-72 p-4 border-r-2 border-white overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             <div className="text-sm font-medium text-gray-600">Questions</div>
             <button
@@ -454,7 +690,7 @@ const Builder: React.FC = () => {
           </div>
         </aside>
 
-        <section className="flex-1 border-r border-gray-200 bg-gray-50 p-6 overflow-y-auto">
+            <section className="flex-1 p-6 overflow-y-auto border-r-2 border-white">
           <div className="border border-gray-200 rounded-xl bg-white overflow-hidden" style={themeStyles}>
             {schema.questions.length === 0 ? (
               <div className="min-h-[520px] flex flex-col items-center justify-center text-center px-6 py-12">
@@ -487,29 +723,8 @@ const Builder: React.FC = () => {
           </div>
         </section>
 
-        <aside className="w-80 p-4 overflow-y-auto">
-          <Tabs.Root defaultValue="form" className="of-tabs">
-            <Tabs.List className="of-tabs-list">
-              <Tabs.Trigger className="of-tabs-trigger" value="form">
-                Form
-              </Tabs.Trigger>
-              <Tabs.Trigger className="of-tabs-trigger" value="question">
-                Question
-              </Tabs.Trigger>
-              <Tabs.Trigger className="of-tabs-trigger" value="branching">
-                Branching
-              </Tabs.Trigger>
-              <Tabs.Trigger className="of-tabs-trigger" value="theme">
-                Theme
-              </Tabs.Trigger>
-              <Tabs.Trigger className="of-tabs-trigger" value="results">
-                Results
-              </Tabs.Trigger>
-              <Tabs.Trigger className="of-tabs-trigger" value="share">
-                Share
-              </Tabs.Trigger>
-            </Tabs.List>
-
+            <aside className="w-80 p-4 overflow-y-auto">
+          <div className="of-tabs">
             <Tabs.Content value="form">
               <div className="space-y-4">
                 <div>
@@ -922,10 +1137,12 @@ const Builder: React.FC = () => {
                 </div>
               </div>
             </Tabs.Content>
-          </Tabs.Root>
-        </aside>
+          </div>
+            </aside>
+          </div>
+        </div>
       </div>
-    </div>
+    </Tabs.Root>
   );
 };
 
