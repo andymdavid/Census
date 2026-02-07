@@ -569,6 +569,15 @@ const Forms: React.FC = () => {
     setDeleteWorkspaceOpen(false);
   };
 
+  const handleDeleteForm = async (formId: string) => {
+    const response = await fetch(`/api/forms/${formId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!response.ok) return;
+    setForms((prev) => prev.filter((form) => form.id !== formId));
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <header className="h-14 px-6 flex items-center justify-between">
@@ -1095,6 +1104,12 @@ const Forms: React.FC = () => {
                                       }}
                                     >
                                       Share
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item
+                                      className="px-4 py-2 text-sm text-red-600 hover:bg-gray-100 cursor-pointer"
+                                      onSelect={() => handleDeleteForm(form.id)}
+                                    >
+                                      Delete
                                     </DropdownMenu.Item>
                                   </DropdownMenu.Content>
                                 </DropdownMenu.Portal>

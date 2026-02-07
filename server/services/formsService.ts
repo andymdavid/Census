@@ -32,6 +32,7 @@ const updateForm = db.prepare(
 const publishForm = db.prepare(
   'UPDATE forms SET published = 1, updated_at = ? WHERE id = ?'
 );
+const deleteForm = db.prepare('DELETE FROM forms WHERE id = ?');
 
 export const listForms = (workspaceId: string) => {
   return selectForms.all(workspaceId) as Array<
@@ -72,4 +73,8 @@ export const publishFormById = (id: string) => {
   const now = Date.now();
   publishForm.run(now, id);
   return { updated_at: now, published: 1 };
+};
+
+export const deleteFormById = (id: string) => {
+  deleteForm.run(id);
 };

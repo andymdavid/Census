@@ -2,6 +2,7 @@ import {
   createForm,
   getFormById,
   listForms,
+  deleteFormById,
   publishFormById,
   updateFormById,
 } from '../services/formsService';
@@ -136,6 +137,18 @@ export const handleFormsRoutes = async (request: Request) => {
       }
 
       updateFormById(formId, { title, schema: payload?.schema ?? {} });
+      return jsonResponse({ ok: true });
+    }
+
+    if (request.method === 'DELETE') {
+      const form = getFormById(formId);
+      if (!form) {
+        return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+      }
+      if (!isWorkspaceMember(form.workspace_id, session?.pubkey ?? '')) {
+        return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+      }
+      deleteFormById(formId);
       return jsonResponse({ ok: true });
     }
   }
