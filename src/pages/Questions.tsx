@@ -28,7 +28,12 @@ const Questions: React.FC<QuestionsProps> = ({
   // Initialize the navigate function from React Router
   const navigate = useNavigate();
   const form = formOverride ?? loadForm();
-  const questions = form.questions;
+  const allQuestions = form.questions;
+  const welcomeScreen = allQuestions.find((q) => q.category === 'Welcome Screen') ?? null;
+  const endScreen = allQuestions.find((q) => q.category === 'End Screen') ?? null;
+  const questions = allQuestions.filter(
+    (q) => q.category !== 'Welcome Screen' && q.category !== 'End Screen'
+  );
   const totalScore = form.totalScore;
   const logoUrl = form.theme?.logoUrl;
   const themeStyles = form.theme
@@ -54,6 +59,8 @@ const Questions: React.FC<QuestionsProps> = ({
   const [history, setHistory] = useState<number[]>([]);
   // State to track direction of transition (forward/backward)
   const [direction, setDirection] = useState(1); // 1 for forward, -1 for backward
+  const [showWelcome, setShowWelcome] = useState(Boolean(welcomeScreen));
+  const [showEnd, setShowEnd] = useState(false);
 
   // Handle answer selection
   const computeScore = (answersSnapshot: Record<number, boolean>) => {
@@ -148,6 +155,8 @@ const Questions: React.FC<QuestionsProps> = ({
       const responseId = await submitResponse(newAnswers, updatedScore);
       if (onComplete) {
         onComplete(updatedScore);
+      } else if (endScreen) {
+        setShowEnd(true);
       } else {
         // Navigate to results page with the final score
         // Use the updated score directly to ensure the last question's score is included
@@ -236,6 +245,85 @@ const Questions: React.FC<QuestionsProps> = ({
       transition: { duration: 0.1 }
     }
   };
+
+  if (showWelcome && welcomeScreen) {
+    return (
+      <div
+        className={`typeform-fullscreen${previewMode ? ' typeform-preview' : ''}`}
+        style={themeStyles}
+      >
+        {logoUrl && (
+          <div className="absolute top-6 left-1/2 -translate-x-1/2">
+            <img src={logoUrl} alt="Form logo" className="h-10 object-contain" />
+          </div>
+        )}
+        <div className={`typeform-content${previewMode ? ' typeform-content-preview' : ''}`}>
+          <div className="typeform-card">
+            <h2 className="typeform-heading">{welcomeScreen.text}</h2>
+            {form.description && <p className="typeform-text">{form.description}</p>}
+            <button
+              type="button"
+              className="typeform-button"
+              onClick={() => setShowWelcome(false)}
+            >
+              Start
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showEnd && endScreen) {
+    return (
+      <div
+        className={`typeform-fullscreen${previewMode ? ' typeform-preview' : ''}`}
+        style={themeStyles}
+      >
+        {logoUrl && (
+          <div className="absolute top-6 left-1/2 -translate-x-1/2">
+            <img src={logoUrl} alt="Form logo" className="h-10 object-contain" />
+          </div>
+        )}
+        <div className={`typeform-content${previewMode ? ' typeform-content-preview' : ''}`}>
+          <div className="typeform-card">
+            <h2 className="typeform-heading">{endScreen.text}</h2>
+            {form.description && <p className="typeform-text">{form.description}</p>}
+            <button
+              type="button"
+              className="typeform-button"
+              onClick={() => {
+                if (previewMode) {
+                  setShowEnd(false);
+                  setShowWelcome(Boolean(welcomeScreen));
+                } else {
+                  navigate('/thank-you');
+                }
+              }}
+            >
+              Finish
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!question) {
+    return (
+      <div
+        className={`typeform-fullscreen${previewMode ? ' typeform-preview' : ''}`}
+        style={themeStyles}
+      >
+        <div className={`typeform-content${previewMode ? ' typeform-content-preview' : ''}`}>
+          <div className="typeform-card">
+            <h2 className="typeform-heading">No questions yet</h2>
+            <p className="typeform-text">Add a question to preview the form.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     // Full-screen container

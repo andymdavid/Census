@@ -6,6 +6,19 @@ import type { LoadedFormSchema } from '../types/formSchema';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Switch from '@radix-ui/react-switch';
 import * as Dialog from '@radix-ui/react-dialog';
+import {
+  Calendar as CalendarIcon,
+  CheckCircle,
+  ChevronDown as ChevronDownIcon,
+  FormInput,
+  ListChecks,
+  Mail,
+  MessageSquareText,
+  Palette,
+  Text,
+  TextCursorInput,
+  ToggleLeft,
+} from 'lucide-react';
 
 const defaultTheme = {
   primaryColor: '#4f46e5',
@@ -55,6 +68,8 @@ const templateSchemas = [
     key: 'blank',
     label: 'Blank Form',
     schema: createSchema({ title: 'Blank Form' }),
+    icon: FormInput,
+    iconClass: 'bg-blue-100 text-blue-600',
   },
   {
     key: 'assessment',
@@ -78,6 +93,8 @@ const templateSchemas = [
         },
       ],
     }),
+    icon: ListChecks,
+    iconClass: 'bg-emerald-100 text-emerald-600',
   },
   {
     key: 'lead',
@@ -89,22 +106,84 @@ const templateSchemas = [
         { id: 1, text: 'Would you like a demo?', weight: 0, category: 'Lead' },
       ],
     }),
+    icon: Mail,
+    iconClass: 'bg-amber-100 text-amber-600',
   },
 ];
 
 const questionTypeTemplates = [
-  { key: 'yesno', label: 'Yes/No', questionText: 'Yes/No question', category: 'Yes/No' },
+  {
+    key: 'yesno',
+    label: 'Yes/No',
+    questionText: 'Yes/No question',
+    category: 'Yes/No',
+    icon: ToggleLeft,
+    iconClass: 'bg-violet-100 text-violet-600',
+  },
   {
     key: 'mc',
     label: 'Multiple Choice',
     questionText: 'Multiple choice question',
     category: 'Multiple Choice',
+    icon: ListChecks,
+    iconClass: 'bg-indigo-100 text-indigo-600',
   },
-  { key: 'short', label: 'Short Text', questionText: 'Short answer question', category: 'Short Text' },
-  { key: 'long', label: 'Long Text', questionText: 'Long answer question', category: 'Long Text' },
-  { key: 'email', label: 'Email', questionText: 'Email address', category: 'Email' },
-  { key: 'number', label: 'Number', questionText: 'Number question', category: 'Number' },
-  { key: 'date', label: 'Date', questionText: 'Date question', category: 'Date' },
+  {
+    key: 'short',
+    label: 'Short Text',
+    questionText: 'Short answer question',
+    category: 'Short Text',
+    icon: TextCursorInput,
+    iconClass: 'bg-blue-100 text-blue-600',
+  },
+  {
+    key: 'long',
+    label: 'Long Text',
+    questionText: 'Long answer question',
+    category: 'Long Text',
+    icon: MessageSquareText,
+    iconClass: 'bg-slate-100 text-slate-600',
+  },
+  {
+    key: 'email',
+    label: 'Email',
+    questionText: 'Email address',
+    category: 'Email',
+    icon: Mail,
+    iconClass: 'bg-rose-100 text-rose-600',
+  },
+  {
+    key: 'number',
+    label: 'Number',
+    questionText: 'Number question',
+    category: 'Number',
+    icon: Text,
+    iconClass: 'bg-orange-100 text-orange-600',
+  },
+  {
+    key: 'date',
+    label: 'Date',
+    questionText: 'Date question',
+    category: 'Date',
+    icon: CalendarIcon,
+    iconClass: 'bg-green-100 text-green-600',
+  },
+  {
+    key: 'welcome',
+    label: 'Welcome Screen',
+    questionText: 'Welcome to the form',
+    category: 'Welcome Screen',
+    icon: CheckCircle,
+    iconClass: 'bg-teal-100 text-teal-600',
+  },
+  {
+    key: 'end',
+    label: 'End Screen',
+    questionText: 'Thanks for completing the form',
+    category: 'End Screen',
+    icon: Palette,
+    iconClass: 'bg-purple-100 text-purple-600',
+  },
 ];
 
 const validateSchema = (schema: FormSchemaV0) => {
@@ -197,6 +276,8 @@ const Builder: React.FC = () => {
   const selectedQuestion = schema.questions.find((question) => question.id === selectedQuestionId);
   const questionOptions = schema.questions.map((question) => question.id);
   const resultOptions = schema.results;
+  const isSelectedWelcome = selectedQuestion?.category === 'Welcome Screen';
+  const isSelectedEnd = selectedQuestion?.category === 'End Screen';
 
   useEffect(() => {
     let isMounted = true;
@@ -286,6 +367,20 @@ const Builder: React.FC = () => {
     } finally {
       setCreating(false);
     }
+  };
+
+  const addQuestionFromTemplate = (template: (typeof questionTypeTemplates)[number]) => {
+    const nextId =
+      schema.questions.reduce((maxId, question) => Math.max(maxId, question.id), 0) + 1;
+    const nextQuestion = {
+      id: nextId,
+      text: template.questionText,
+      weight: 0,
+      category: template.category,
+    };
+    setSchema((prev) => ({ ...prev, questions: [...prev.questions, nextQuestion] }));
+    setSelectedQuestionId(nextId);
+    setTemplateModalOpen(false);
   };
 
   useEffect(() => {
@@ -462,24 +557,24 @@ const Builder: React.FC = () => {
               </Dialog.Close>
             </div>
 
-            <div className="space-y-7">
-              <div>
-                <div className="text-xs uppercase tracking-wide text-gray-400 mb-3">
-                  Templates
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-[220px_1fr] gap-8">
+              <div className="space-y-3">
+                <div className="text-xs uppercase tracking-wide text-gray-400 mb-2">Templates</div>
+                <div className="space-y-2">
                   {templateSchemas.map((template) => (
                     <button
                       key={template.key}
                       type="button"
-                      className="of-card p-4 text-left hover:border-primary/60 hover:shadow-md transition"
+                      className="w-full text-left px-3 py-2 rounded-xl border border-gray-200 bg-white hover:border-primary/60 hover:shadow-sm transition text-sm text-gray-700 flex items-center gap-3"
                       onClick={() => createForm(template.schema, template.schema.title)}
                       disabled={creating}
                     >
-                      <div className="text-sm font-medium text-gray-800">{template.label}</div>
-                      <div className="text-xs text-gray-500 mt-1 leading-relaxed">
-                        Start with {template.label.toLowerCase()}.
-                      </div>
+                      <span
+                        className={`h-8 w-8 rounded-lg inline-flex items-center justify-center ${template.iconClass}`}
+                      >
+                        <template.icon className="h-4 w-4" />
+                      </span>
+                      <span>{template.label}</span>
                     </button>
                   ))}
                 </div>
@@ -487,41 +582,49 @@ const Builder: React.FC = () => {
 
               <div>
                 <div className="text-xs uppercase tracking-wide text-gray-400 mb-3">
-                  Question types
+                  Types
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3">
                   {questionTypeTemplates.map((template) => (
                     <button
                       key={template.key}
                       type="button"
-                      className="of-card p-3 text-left hover:border-primary/60 hover:shadow-md transition"
-                      onClick={() =>
-                        createForm(
-                          createSchema({
-                            title: template.label,
-                            questions: [
-                              {
-                                id: 1,
-                                text: template.questionText,
-                                weight: 0,
-                                category: template.category,
-                              },
-                            ],
-                          }),
-                          template.label
-                        )
-                      }
+                      className="text-left text-sm text-gray-700 hover:text-gray-900 inline-flex items-center gap-3"
+                      onClick={() => {
+                        if (isNew) {
+                          createForm(
+                            createSchema({
+                              title: template.label,
+                              questions: [
+                                {
+                                  id: 1,
+                                  text: template.questionText,
+                                  weight: 0,
+                                  category: template.category,
+                                },
+                              ],
+                            }),
+                            template.label
+                          );
+                        } else {
+                          addQuestionFromTemplate(template);
+                        }
+                      }}
                       disabled={creating}
                     >
-                      <div className="text-sm font-medium text-gray-800">{template.label}</div>
-                      <div className="text-xs text-gray-500 mt-1">Add a starter question.</div>
+                      <span
+                        className={`h-7 w-7 rounded-md inline-flex items-center justify-center ${template.iconClass}`}
+                      >
+                        <template.icon className="h-4 w-4" />
+                      </span>
+                      {template.label}
                     </button>
                   ))}
                 </div>
               </div>
-
-              {creating && <div className="text-sm text-gray-500">Creating form...</div>}
             </div>
+
+            {creating && <div className="text-sm text-gray-500 mt-6">Creating form...</div>}
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
@@ -632,21 +735,27 @@ const Builder: React.FC = () => {
         <div className="rounded-2xl overflow-hidden flex-1 flex" style={{ backgroundColor: '#f7f7f8' }}>
           <div className="flex flex-1 min-h-0">
             <aside className="w-72 p-4 border-r-2 border-white overflow-y-auto">
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-sm font-medium text-gray-600">Questions</div>
-            <button
-              type="button"
-              className="text-xs text-primary hover:text-primary/80"
-              onClick={addQuestion}
-            >
-              Add
-            </button>
-          </div>
-          <div className="space-y-2">
+              <button
+                type="button"
+                className="w-full h-[36px] rounded-xl bg-[#2f2b34] text-white text-sm font-medium inline-flex items-center justify-center gap-2 hover:bg-[#27222a] transition"
+                onClick={() => setTemplateModalOpen(true)}
+              >
+                <span className="text-lg leading-none">+</span>
+                Add content
+              </button>
+              <div className="-mx-4 mt-4 h-0.5 bg-white/80" />
+              <div className="flex items-center justify-between mt-4 mb-4">
+                <div className="text-sm font-medium text-gray-600">Questions</div>
+              </div>
+              <div className="space-y-2">
             {schema.questions.length === 0 && (
               <div className="text-sm text-gray-500">No questions yet.</div>
             )}
-            {schema.questions.map((question, index) => (
+            {schema.questions.map((question, index) => {
+              const isWelcome = question.category === 'Welcome Screen';
+              const isEnd = question.category === 'End Screen';
+              const label = isWelcome ? 'Start screen' : isEnd ? 'End screen' : `Q${question.id}`;
+              return (
               <button
                 key={question.id}
                 type="button"
@@ -658,7 +767,7 @@ const Builder: React.FC = () => {
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium text-gray-800">Q{question.id}</div>
+                  <div className="text-sm font-medium text-gray-800">{label}</div>
                   <div className="flex items-center gap-2 text-xs text-gray-400">
                     <button
                       type="button"
@@ -686,23 +795,64 @@ const Builder: React.FC = () => {
                 </div>
                 <div className="text-xs text-gray-500 mt-1 truncate">{question.text}</div>
               </button>
-            ))}
-          </div>
-        </aside>
+            );
+            })}
+              </div>
+            </aside>
 
             <section className="flex-1 p-6 overflow-y-auto border-r-2 border-white">
-          <div className="border border-gray-200 rounded-xl bg-white overflow-hidden" style={themeStyles}>
-            {schema.questions.length === 0 ? (
-              <div className="min-h-[520px] flex flex-col items-center justify-center text-center px-6 py-12">
-                <h3 className="text-xl font-semibold mb-2 text-gray-800">No questions yet</h3>
-                <p className="text-sm text-gray-500 max-w-md">
-                  Add a question on the left to see the live preview.
-                </p>
-              </div>
-            ) : schema.description?.trim() && previewStep === 'intro' ? (
-              <div className="min-h-[520px] flex flex-col items-center justify-center text-center px-6 py-12">
-                <h3 className="text-2xl font-semibold mb-4 text-gray-800">{schema.title}</h3>
-                <p className="text-gray-600 max-w-md mb-6">{schema.description}</p>
+              <div
+                className={`h-full ${isSelectedWelcome || isSelectedEnd ? '' : 'border border-gray-200 rounded-xl bg-white overflow-hidden'}`}
+                style={themeStyles}
+              >
+                {schema.questions.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12">
+                    <h3 className="text-xl font-semibold mb-2 text-gray-800">No questions yet</h3>
+                    <p className="text-sm text-gray-500 max-w-md">
+                      Add a question on the left to see the live preview.
+                    </p>
+                  </div>
+                ) : isSelectedWelcome || isSelectedEnd ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12">
+                    <input
+                      type="text"
+                      value={selectedQuestion?.text ?? ''}
+                      onChange={(event) => {
+                        if (!selectedQuestion) return;
+                        updateQuestion(selectedQuestion.id, (question) => ({
+                          ...question,
+                          text: event.target.value,
+                        }));
+                      }}
+                      className="w-full max-w-2xl text-3xl font-semibold text-gray-500 text-center bg-transparent focus:outline-none"
+                      placeholder={isSelectedWelcome ? 'Welcome title' : 'End title'}
+                    />
+                    <input
+                      type="text"
+                      value={schema.description ?? ''}
+                      onChange={(event) =>
+                        setSchema((prev) => ({ ...prev, description: event.target.value }))
+                      }
+                      className="w-full max-w-xl text-lg text-gray-400 text-center bg-transparent focus:outline-none mt-6"
+                      placeholder="Description (optional)"
+                    />
+                    <div className="mt-8 flex items-center gap-4">
+                      <button
+                        type="button"
+                        className="px-6 py-3 rounded-md bg-[#1f3bb3] text-white text-xl font-semibold"
+                      >
+                        {isSelectedWelcome ? 'Start' : 'Finish'}
+                      </button>
+                      <span className="text-sm text-gray-600">press Enter ↵</span>
+                    </div>
+                    <div className="mt-4 text-sm text-gray-600">
+                      {isSelectedWelcome ? 'X people have filled this out' : 'Thanks for taking part'}
+                    </div>
+                  </div>
+                ) : schema.description?.trim() && previewStep === 'intro' ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12">
+                    <h3 className="text-2xl font-semibold mb-4 text-gray-800">{schema.title}</h3>
+                    <p className="text-gray-600 max-w-md mb-6">{schema.description}</p>
                 <button
                   type="button"
                   className="typeform-button"
@@ -712,7 +862,7 @@ const Builder: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="min-h-[520px]">
+              <div className="h-full">
                 <Questions
                   form={previewForm}
                   onComplete={() => setPreviewStep(schema.description?.trim() ? 'intro' : 'questions')}
