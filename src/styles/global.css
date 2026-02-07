@@ -49,6 +49,14 @@ body {
   letter-spacing: 0.2px;
 }
 
+/* Radix menu focus ring cleanup */
+[data-radix-collection-item]:focus-visible {
+  outline: none;
+}
+[data-radix-collection-item] {
+  outline: none;
+}
+
 /* Custom utility classes */
 .typeform-container {
   @apply flex flex-col items-center justify-center min-h-screen relative;

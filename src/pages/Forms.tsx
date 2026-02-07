@@ -158,6 +158,7 @@ const Forms: React.FC = () => {
   const [orgMenuOpen, setOrgMenuOpen] = useState(false);
   const [orgModalOpen, setOrgModalOpen] = useState(false);
   const [orgName, setOrgName] = useState('');
+  const [orgError, setOrgError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -178,7 +179,7 @@ const Forms: React.FC = () => {
           }
         }
         if (!organizationsResponse.ok) {
-          throw new Error('Failed to load organizations.');
+          throw new Error('Failed to load organisations.');
         }
         const orgData = (await organizationsResponse.json()) as { organizations?: OrganizationItem[] };
         if (isMounted) {
@@ -418,15 +419,21 @@ const Forms: React.FC = () => {
 
   const handleCreateOrganization = async () => {
     const trimmed = orgName.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      setOrgError('Organisation name is required.');
+      return;
+    }
     const response = await fetch('/api/organizations', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: trimmed }),
     });
-    if (!response.ok) return;
-    const data = (await response.json()) as { id?: string };
+    const data = (await response.json().catch(() => ({}))) as { id?: string; error?: string };
+    if (!response.ok) {
+      setOrgError(data.error ?? `Unable to create organisation (${response.status}).`);
+      return;
+    }
     if (data.id) {
       const newOrg: OrganizationItem = {
         id: data.id,
@@ -437,6 +444,7 @@ const Forms: React.FC = () => {
       setOrganizations((prev) => [...prev, newOrg]);
       setActiveOrganization(data.id);
       setOrgName('');
+      setOrgError(null);
       setOrgModalOpen(false);
     }
   };
@@ -480,7 +488,7 @@ const Forms: React.FC = () => {
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   const workspaceLabel = activeWorkspace?.name ?? 'Workspace';
   const activeOrganization = organizations.find((org) => org.id === activeOrganizationId);
-  const organizationLabel = activeOrganization?.name ?? 'Organization';
+  const organizationLabel = activeOrganization?.name ?? 'Add new organisation';
   const shortNpub = npub ? `${npub.slice(0, 10)}…${npub.slice(-4)}` : null;
 
   const handleCopyNpub = async () => {
@@ -827,11 +835,18 @@ const Forms: React.FC = () => {
               <div className="mt-auto pt-4">
                 <DropdownMenu.Root open={orgMenuOpen} onOpenChange={setOrgMenuOpen}>
                   <DropdownMenu.Trigger asChild>
-                    <button className="w-full flex items-center gap-3 text-left">
-                      <div className="h-10 w-10 rounded-lg bg-emerald-700/80 text-white text-xs font-semibold flex items-center justify-center">
-                        OS
+                    <button className="w-full flex items-center justify-between text-left">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-emerald-700/80 text-white text-xs font-semibold flex items-center justify-center">
+                          OS
+                        </div>
+                        <div className="text-sm font-medium text-gray-700">{organizationLabel}</div>
                       </div>
-                      <div className="text-sm font-medium text-gray-700">{organizationLabel}</div>
+                      <ChevronDown
+                        className={`h-4 w-4 text-gray-400 transition-transform ${
+                          orgMenuOpen ? 'rotate-180' : ''
+                        }`}
+                      />
                     </button>
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
@@ -842,7 +857,7 @@ const Forms: React.FC = () => {
                       className="w-64 rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden"
                     >
                       <div className="px-4 py-3 text-xs uppercase tracking-wide text-gray-400">
-                        Organizations
+                        Organisations
                       </div>
                       {organizations.map((org) => (
                         <DropdownMenu.Item
@@ -863,7 +878,7 @@ const Forms: React.FC = () => {
                         className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
                         onSelect={() => setOrgModalOpen(true)}
                       >
-                        Create organization
+                        Create organisation
                       </DropdownMenu.Item>
                       <DropdownMenu.Separator className="h-px bg-gray-100" />
                       <DropdownMenu.Item
@@ -874,7 +889,7 @@ const Forms: React.FC = () => {
                       <DropdownMenu.Item
                         className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
                       >
-                        Org members
+                        Organisation members
                       </DropdownMenu.Item>
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>
@@ -992,11 +1007,11 @@ const Forms: React.FC = () => {
                 <>
 
                   <div className="px-6 py-2">
-                    <div className="grid grid-cols-[1fr_120px_120px_140px_80px] text-xs text-gray-400 max-w-5xl">
+                    <div className="grid grid-cols-[1fr_120px_120px_140px_80px] text-xs text-gray-400 text-left items-center px-4">
                       <div>Forms</div>
-                      <div>Responses</div>
-                      <div>Completion</div>
-                      <div>Updated</div>
+                      <div className="flex items-center justify-center">Responses</div>
+                      <div className="flex items-center justify-center">Completion</div>
+                      <div className="text-center">Updated</div>
                       <div className="text-right">Actions</div>
                     </div>
                   </div>
@@ -1017,7 +1032,7 @@ const Forms: React.FC = () => {
                         return (
                           <div
                             key={form.id}
-                            className="bg-white border border-gray-200 rounded-xl px-4 py-3 grid grid-cols-[1fr_120px_120px_140px_80px] items-center hover:border-primary/40 hover:shadow-sm transition max-w-5xl"
+                            className="bg-white border border-gray-200 rounded-xl px-4 py-3 grid grid-cols-[1fr_120px_120px_140px_80px] items-center hover:border-primary/40 hover:shadow-sm transition"
                           >
                             <div className="flex items-center gap-3">
                               <div className="h-10 w-10 rounded-lg bg-emerald-700/80 text-white text-xs font-semibold flex items-center justify-center">
@@ -1041,9 +1056,11 @@ const Forms: React.FC = () => {
                                 </div>
                               </div>
                             </div>
-                            <div className="text-sm text-gray-600">{form.responses_count ?? 0}</div>
-                            <div className="text-sm text-gray-600">{completionRate}%</div>
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm text-gray-600 text-center">
+                              {form.responses_count ?? 0}
+                            </div>
+                            <div className="text-sm text-gray-600 text-center">{completionRate}%</div>
+                            <div className="text-sm text-gray-600 text-center">
                               {new Date(form.updated_at).toLocaleDateString()}
                             </div>
                             <div className="flex items-center justify-end">
@@ -1095,17 +1112,17 @@ const Forms: React.FC = () => {
                 <div className="px-6 pb-6">
                   <div className="bg-white border border-gray-200 rounded-xl p-6">
                     <div className="text-base font-semibold text-gray-800">
-                      Create your first organization
+                      Create your first organisation
                     </div>
                     <div className="text-sm text-gray-500 mt-2">
-                      Organizations group workspaces and members.
+                      Organisations group workspaces and members.
                     </div>
                     <button
                       type="button"
                       className="mt-4 inline-flex items-center rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:border-gray-300"
                       onClick={() => setOrgModalOpen(true)}
                     >
-                      Create organization
+                      Create organisation
                     </button>
                   </div>
                 </div>
@@ -1269,17 +1286,25 @@ const Forms: React.FC = () => {
         </Dialog.Portal>
       </Dialog.Root>
 
-      <Dialog.Root open={orgModalOpen} onOpenChange={setOrgModalOpen}>
+      <Dialog.Root
+        open={orgModalOpen}
+        onOpenChange={(open) => {
+          setOrgModalOpen(open);
+          if (!open) {
+            setOrgError(null);
+          }
+        }}
+      >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
           <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl focus:outline-none">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <Dialog.Title className="text-lg font-semibold text-gray-900">
-                  New organization
+                  New organisation
                 </Dialog.Title>
                 <Dialog.Description className="text-sm text-gray-500 mt-1">
-                  Create an organization to group workspaces.
+                  Create an organisation to group workspaces.
                 </Dialog.Description>
               </div>
               <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-xl border border-gray-200">
@@ -1288,9 +1313,10 @@ const Forms: React.FC = () => {
             </div>
 
             <div className="space-y-4">
+              {orgError && <div className="text-sm text-red-600">{orgError}</div>}
               <div>
                 <label htmlFor="org-name" className="text-xs text-gray-500">
-                  Organization name
+                  Organisation name
                 </label>
                 <input
                   id="org-name"

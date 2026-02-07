@@ -1,5 +1,10 @@
 import db from '../db';
-import { createWorkspace, listWorkspacesForOrgAndUser, updateWorkspacesOrganization } from './workspaceService';
+import {
+  attachLegacyFormsToWorkspace,
+  createWorkspace,
+  listWorkspacesForOrgAndUser,
+  updateWorkspacesOrganization,
+} from './workspaceService';
 
 export interface OrganizationRecord {
   id: string;
@@ -63,7 +68,7 @@ export const ensureDefaultOrganization = (pubkey: string) => {
   const defaultWorkspace = createWorkspace('My workspace', pubkey, created.id);
   updateWorkspacesOrganization(created.id);
   if (defaultWorkspace?.id) {
-    // no-op: createWorkspace already assigns the org
+    attachLegacyFormsToWorkspace(defaultWorkspace.id);
   }
   return getOrganizationById(created.id);
 };

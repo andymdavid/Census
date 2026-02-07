@@ -57,6 +57,9 @@ const updateFormsWorkspace = db.prepare(
 const updateWorkspacesOrg = db.prepare(
   "UPDATE workspaces SET organization_id = ? WHERE organization_id = '' OR organization_id IS NULL"
 );
+const updateFormsWorkspaceByEmpty = db.prepare(
+  "UPDATE forms SET workspace_id = ? WHERE workspace_id = '' OR workspace_id IS NULL"
+);
 const updateFormsWorkspaceById = db.prepare(
   'UPDATE forms SET workspace_id = ? WHERE workspace_id = ?'
 );
@@ -160,4 +163,8 @@ export const deleteWorkspace = (workspaceId: string) => {
 
 export const updateWorkspacesOrganization = (organizationId: string) => {
   updateWorkspacesOrg.run(organizationId);
+};
+
+export const attachLegacyFormsToWorkspace = (workspaceId: string) => {
+  updateFormsWorkspaceByEmpty.run(workspaceId);
 };

@@ -1,11 +1,15 @@
 import {
   createOrganization,
-  ensureDefaultOrganization,
   getOrganizationById,
   isOrganizationMember,
   listOrganizationsForUser,
 } from '../services/organizationService';
-import { ensureDefaultWorkspace } from '../services/workspaceService';
+import {
+  attachLegacyFormsToWorkspace,
+  ensureDefaultWorkspace,
+  listWorkspacesForOrgAndUser,
+  updateWorkspacesOrganization,
+} from '../services/workspaceService';
 import { getSessionFromRequest } from '../services/sessionService';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
@@ -37,12 +41,13 @@ export const handleOrganizationsRoutes = async (request: Request) => {
 
   if (request.method === 'GET' && path === '/api/organizations') {
     const list = listOrganizationsForUser(session.pubkey);
-    if (list.length === 0) {
-      const created = ensureDefaultOrganization(session.pubkey);
-      if (created?.id) {
-        ensureDefaultWorkspace(session.pubkey, created.id);
+    if (list.length > 0) {
+      const primaryOrgId = list[0].id;
+      updateWorkspacesOrganization(primaryOrgId);
+      const workspaces = listWorkspacesForOrgAndUser(primaryOrgId, session.pubkey);
+      if (workspaces[0]?.id) {
+        attachLegacyFormsToWorkspace(workspaces[0].id);
       }
-      return jsonResponse({ organizations: listOrganizationsForUser(session.pubkey) });
     }
     return jsonResponse({ organizations: list });
   }
@@ -54,7 +59,11 @@ export const handleOrganizationsRoutes = async (request: Request) => {
       return jsonResponse({ error: 'Name is required.' }, { status: 400 });
     }
     const created = createOrganization(name, session.pubkey);
-    ensureDefaultWorkspace(session.pubkey, created.id);
+    updateWorkspacesOrganization(created.id);
+    const defaultWorkspace = ensureDefaultWorkspace(session.pubkey, created.id);
+    if (defaultWorkspace?.id) {
+      attachLegacyFormsToWorkspace(defaultWorkspace.id);
+    }
     return jsonResponse({ id: created.id });
   }
 
