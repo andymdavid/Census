@@ -266,8 +266,19 @@ const Questions: React.FC<QuestionsProps> = ({
               className="typeform-button"
               onClick={() => setShowWelcome(false)}
             >
-              Start
+              {welcomeScreen.settings?.buttonLabel ?? 'Start'}
             </button>
+            {(welcomeScreen.settings?.showTimeToComplete ||
+              welcomeScreen.settings?.showSubmissionCount) && (
+              <div className="text-gray-400 text-sm mt-4 flex flex-col items-center gap-2">
+                {welcomeScreen.settings?.showTimeToComplete && (
+                  <span className="inline-block">Takes X minutes</span>
+                )}
+                {welcomeScreen.settings?.showSubmissionCount && (
+                  <span className="inline-block">X people have filled this out</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -301,7 +312,7 @@ const Questions: React.FC<QuestionsProps> = ({
                 }
               }}
             >
-              Finish
+              {endScreen.settings?.buttonLabel ?? 'Finish'}
             </button>
           </div>
         </div>

@@ -16,6 +16,22 @@ export interface FormQuestion {
   weight: number;
   category: string;
   branching?: FormBranching;
+  settings?: FormQuestionSettings;
+}
+
+export interface FormQuestionSettings {
+  kind?: 'welcome' | 'end' | 'yesno' | 'multiple' | 'short' | 'long' | 'email' | 'number' | 'date';
+  answerType?: 'multiple' | 'yesno' | 'short' | 'long' | 'email' | 'number' | 'date';
+  required?: boolean;
+  multipleSelection?: boolean;
+  randomize?: boolean;
+  otherOption?: boolean;
+  verticalAlignment?: boolean;
+  mapToContacts?: boolean;
+  showTimeToComplete?: boolean;
+  showSubmissionCount?: boolean;
+  buttonLabel?: string;
+  mediaUrl?: string;
 }
 
 export interface FormResultThreshold {

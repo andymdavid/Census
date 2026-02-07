@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Questions from './Questions';
-import type { FormSchemaV0 } from '../types/formSchema';
+import type { FormQuestionSettings, FormSchemaV0 } from '../types/formSchema';
 import type { LoadedFormSchema } from '../types/formSchema';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Switch from '@radix-ui/react-switch';
@@ -255,6 +255,9 @@ const Builder: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
   const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<
+    'form' | 'question' | 'branching' | 'theme' | 'results' | 'share'
+  >('form');
   const [previewStep, setPreviewStep] = useState<'intro' | 'questions'>('intro');
   const [showShare, setShowShare] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -272,12 +275,21 @@ const Builder: React.FC = () => {
     () => ({ ...schema, totalScore: getTotalScore(schema) }),
     [schema]
   );
+  const questionToggleSettings: { label: string; key: keyof FormQuestionSettings }[] = [
+    { label: 'Required', key: 'required' },
+    { label: 'Multiple selection', key: 'multipleSelection' },
+    { label: 'Randomize', key: 'randomize' },
+    { label: '"Other" option', key: 'otherOption' },
+    { label: 'Vertical alignment', key: 'verticalAlignment' },
+    { label: 'Map to contacts', key: 'mapToContacts' },
+  ];
 
   const selectedQuestion = schema.questions.find((question) => question.id === selectedQuestionId);
   const questionOptions = schema.questions.map((question) => question.id);
   const resultOptions = schema.results;
   const isSelectedWelcome = selectedQuestion?.category === 'Welcome Screen';
   const isSelectedEnd = selectedQuestion?.category === 'End Screen';
+  const selectedSettings = selectedQuestion?.settings ?? {};
 
   useEffect(() => {
     let isMounted = true;
@@ -377,9 +389,34 @@ const Builder: React.FC = () => {
       text: template.questionText,
       weight: 0,
       category: template.category,
+      settings: {
+        kind:
+          template.key === 'welcome'
+            ? 'welcome'
+            : template.key === 'end'
+              ? 'end'
+              : template.key === 'yesno'
+                ? 'yesno'
+                : template.key === 'mc'
+                  ? 'multiple'
+                  : template.key === 'short'
+                    ? 'short'
+                    : template.key === 'long'
+                      ? 'long'
+                      : template.key === 'email'
+                        ? 'email'
+                        : template.key === 'number'
+                          ? 'number'
+                          : template.key === 'date'
+                            ? 'date'
+                            : undefined,
+        answerType: template.key === 'mc' ? 'multiple' : template.key === 'yesno' ? 'yesno' : 'short',
+        buttonLabel: template.key === 'welcome' ? 'Start' : template.key === 'end' ? 'Finish' : undefined,
+      },
     };
     setSchema((prev) => ({ ...prev, questions: [...prev.questions, nextQuestion] }));
     setSelectedQuestionId(nextId);
+    setActiveTab('question');
     setTemplateModalOpen(false);
   };
 
@@ -411,6 +448,18 @@ const Builder: React.FC = () => {
     }));
   };
 
+  const updateSelectedQuestionSettings = (
+    updater: (
+      settings: NonNullable<FormSchemaV0['questions'][number]['settings']>
+    ) => NonNullable<FormSchemaV0['questions'][number]['settings']>
+  ) => {
+    if (!selectedQuestion) return;
+    updateQuestion(selectedQuestion.id, (question) => ({
+      ...question,
+      settings: updater(question.settings ?? {}),
+    }));
+  };
+
   const addQuestion = () => {
     const nextId = schema.questions.reduce((maxId, question) => Math.max(maxId, question.id), 0) + 1;
     const nextQuestion = {
@@ -418,9 +467,13 @@ const Builder: React.FC = () => {
       text: 'New question',
       weight: 0,
       category: 'General',
+      settings: {
+        answerType: 'short',
+      },
     };
     setSchema((prev) => ({ ...prev, questions: [...prev.questions, nextQuestion] }));
     setSelectedQuestionId(nextId);
+    setActiveTab('question');
   };
 
   const removeQuestion = (questionId: number) => {
@@ -538,7 +591,11 @@ const Builder: React.FC = () => {
     : undefined;
 
   return (
-    <Tabs.Root defaultValue="form" className="min-h-screen flex flex-col bg-white">
+    <Tabs.Root
+      value={activeTab}
+      onValueChange={(value) => setActiveTab(value as typeof activeTab)}
+      className="min-h-screen flex flex-col bg-white"
+    >
       <Dialog.Root open={templateModalOpen} onOpenChange={setTemplateModalOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
@@ -759,7 +816,10 @@ const Builder: React.FC = () => {
               <button
                 key={question.id}
                 type="button"
-                onClick={() => setSelectedQuestionId(question.id)}
+                onClick={() => {
+                  setSelectedQuestionId(question.id);
+                  setActiveTab('question');
+                }}
                 className={`w-full text-left border rounded-md p-3 transition ${
                   question.id === selectedQuestionId
                     ? 'border-primary bg-primary/5'
@@ -841,13 +901,22 @@ const Builder: React.FC = () => {
                         type="button"
                         className="px-6 py-3 rounded-md bg-[#1f3bb3] text-white text-xl font-semibold"
                       >
-                        {isSelectedWelcome ? 'Start' : 'Finish'}
+                        {selectedQuestion?.settings?.buttonLabel ??
+                          (isSelectedWelcome ? 'Start' : 'Finish')}
                       </button>
                       <span className="text-sm text-gray-600">press Enter ↵</span>
                     </div>
-                    <div className="mt-4 text-sm text-gray-600">
-                      {isSelectedWelcome ? 'X people have filled this out' : 'Thanks for taking part'}
-                    </div>
+                    {(selectedSettings.showTimeToComplete ||
+                      selectedSettings.showSubmissionCount ||
+                      isSelectedEnd) && (
+                      <div className="mt-4 text-sm text-gray-600 text-center space-y-1">
+                        {selectedSettings.showTimeToComplete && <div>Takes X minutes</div>}
+                        {selectedSettings.showSubmissionCount && <div>X people have filled this out</div>}
+                        {isSelectedEnd && !selectedSettings.showTimeToComplete && !selectedSettings.showSubmissionCount && (
+                          <div>Thanks for taking part</div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : schema.description?.trim() && previewStep === 'intro' ? (
                   <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12">
@@ -893,60 +962,221 @@ const Builder: React.FC = () => {
             </Tabs.Content>
 
             <Tabs.Content value="question">
-              <div className="space-y-3">
-                <div className="text-sm font-medium text-gray-600">Question properties</div>
+              <div className="space-y-4">
                 {selectedQuestion ? (
-                  <div className="space-y-3">
+                  <>
                     <div>
-                      <label className="of-label">Question text</label>
-                      <input
-                        type="text"
-                        value={selectedQuestion.text}
-                        onChange={(event) =>
+                      <label className="of-label">Screen type</label>
+                      <select
+                        value={isSelectedWelcome ? 'welcome' : isSelectedEnd ? 'end' : 'question'}
+                        onChange={(event) => {
+                          const nextType = event.target.value;
+                          if (nextType === 'question') {
+                            updateQuestion(selectedQuestion.id, (question) => ({
+                              ...question,
+                              category: question.category === 'Welcome Screen' || question.category === 'End Screen'
+                                ? 'General'
+                                : question.category,
+                              settings: {
+                                ...(question.settings ?? {}),
+                                kind: undefined,
+                              },
+                            }));
+                            return;
+                          }
                           updateQuestion(selectedQuestion.id, (question) => ({
                             ...question,
-                            text: event.target.value,
-                          }))
-                        }
+                            category: nextType === 'welcome' ? 'Welcome Screen' : 'End Screen',
+                            settings: {
+                              ...(question.settings ?? {}),
+                              kind: nextType === 'welcome' ? 'welcome' : 'end',
+                              buttonLabel:
+                                (question.settings ?? {}).buttonLabel ??
+                                (nextType === 'welcome' ? 'Start' : 'Finish'),
+                            },
+                          }));
+                        }}
                         className="of-input"
-                      />
+                      >
+                        <option value="question">Question</option>
+                        <option value="welcome">Welcome Screen</option>
+                        <option value="end">End Screen</option>
+                      </select>
                     </div>
-                    <div>
-                      <label className="of-label">Category</label>
-                      <input
-                        type="text"
-                        value={selectedQuestion.category}
-                        onChange={(event) =>
-                          updateQuestion(selectedQuestion.id, (question) => ({
-                            ...question,
-                            category: event.target.value,
-                          }))
-                        }
-                        className="of-input"
-                      />
-                    </div>
-                    <div>
-                      <label className="of-label">Weight</label>
-                      <input
-                        type="number"
-                        value={selectedQuestion.weight}
-                        onChange={(event) =>
-                          updateQuestion(selectedQuestion.id, (question) => ({
-                            ...question,
-                            weight: Number(event.target.value),
-                          }))
-                        }
-                        className="of-input"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      className="text-xs text-red-600 hover:text-red-800"
-                      onClick={() => removeQuestion(selectedQuestion.id)}
-                    >
-                      Remove question
-                    </button>
-                  </div>
+
+                    <div className="-mx-4 h-0.5 bg-white/80" />
+
+                    <div className="text-sm font-medium text-gray-600">Question properties</div>
+
+                    {isSelectedWelcome || isSelectedEnd ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm text-gray-600">Time to complete</div>
+                          </div>
+                          <Switch.Root
+                            className="of-switch"
+                            checked={Boolean(selectedSettings.showTimeToComplete)}
+                            onCheckedChange={(checked) =>
+                              updateSelectedQuestionSettings((settings) => ({
+                                ...settings,
+                                showTimeToComplete: checked,
+                              }))
+                            }
+                          >
+                            <Switch.Thumb className="of-switch-thumb" />
+                          </Switch.Root>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm text-gray-600">Number of submissions</div>
+                          </div>
+                          <Switch.Root
+                            className="of-switch"
+                            checked={Boolean(selectedSettings.showSubmissionCount)}
+                            onCheckedChange={(checked) =>
+                              updateSelectedQuestionSettings((settings) => ({
+                                ...settings,
+                                showSubmissionCount: checked,
+                              }))
+                            }
+                          >
+                            <Switch.Thumb className="of-switch-thumb" />
+                          </Switch.Root>
+                        </div>
+
+                        <div>
+                          <label className="of-label">Button</label>
+                          <input
+                            type="text"
+                            value={
+                              selectedSettings.buttonLabel ??
+                              (isSelectedWelcome ? 'Start' : 'Finish')
+                            }
+                            onChange={(event) =>
+                              updateSelectedQuestionSettings((settings) => ({
+                                ...settings,
+                                buttonLabel: event.target.value,
+                              }))
+                            }
+                            className="of-input"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                          <div className="text-sm text-gray-600">Image or video</div>
+                          <button
+                            type="button"
+                            className="h-8 w-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="text-xs text-red-600 hover:text-red-800"
+                          onClick={() => removeQuestion(selectedQuestion.id)}
+                        >
+                          Remove screen
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="of-label">Question text</label>
+                          <input
+                            type="text"
+                            value={selectedQuestion.text}
+                            onChange={(event) =>
+                              updateQuestion(selectedQuestion.id, (question) => ({
+                                ...question,
+                                text: event.target.value,
+                              }))
+                            }
+                            className="of-input"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            className="of-pill text-sm bg-gray-100 text-gray-700"
+                          >
+                            Text
+                          </button>
+                          <button
+                            type="button"
+                            className="of-pill text-sm text-gray-400 border border-gray-200"
+                          >
+                            Video
+                          </button>
+                        </div>
+
+                        <div>
+                          <label className="of-label">Answer</label>
+                          <select
+                            value={selectedSettings.answerType ?? 'multiple'}
+                            onChange={(event) =>
+                              updateSelectedQuestionSettings((settings) => ({
+                                ...settings,
+                                answerType: event.target.value as NonNullable<
+                                  FormSchemaV0['questions'][number]['settings']
+                                >['answerType'],
+                              }))
+                            }
+                            className="of-input"
+                          >
+                            <option value="multiple">Multiple Choice</option>
+                            <option value="yesno">Yes/No</option>
+                            <option value="short">Short Text</option>
+                            <option value="long">Long Text</option>
+                            <option value="email">Email</option>
+                            <option value="number">Number</option>
+                            <option value="date">Date</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-3">
+                          {questionToggleSettings.map(({ label, key }) => (
+                            <div className="flex items-center justify-between" key={key}>
+                              <div className="text-sm text-gray-600">{label}</div>
+                              <Switch.Root
+                                className="of-switch"
+                                checked={Boolean(selectedSettings[key])}
+                                onCheckedChange={(checked) =>
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    [key]: checked,
+                                  }))
+                                }
+                              >
+                                <Switch.Thumb className="of-switch-thumb" />
+                              </Switch.Root>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                          <div className="text-sm text-gray-600">Image or video</div>
+                          <button
+                            type="button"
+                            className="h-8 w-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="text-xs text-red-600 hover:text-red-800"
+                          onClick={() => removeQuestion(selectedQuestion.id)}
+                        >
+                          Remove question
+                        </button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="text-sm text-gray-500">Select a question to edit.</div>
                 )}
