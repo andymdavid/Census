@@ -159,6 +159,7 @@ const Forms: React.FC = () => {
   const [orgModalOpen, setOrgModalOpen] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [orgError, setOrgError] = useState<string | null>(null);
+  const [deleteFormTarget, setDeleteFormTarget] = useState<FormListItem | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -569,13 +570,15 @@ const Forms: React.FC = () => {
     setDeleteWorkspaceOpen(false);
   };
 
-  const handleDeleteForm = async (formId: string) => {
-    const response = await fetch(`/api/forms/${formId}`, {
+  const handleDeleteForm = async () => {
+    if (!deleteFormTarget) return;
+    const response = await fetch(`/api/forms/${deleteFormTarget.id}`, {
       method: 'DELETE',
       credentials: 'include',
     });
     if (!response.ok) return;
-    setForms((prev) => prev.filter((form) => form.id !== formId));
+    setForms((prev) => prev.filter((form) => form.id !== deleteFormTarget.id));
+    setDeleteFormTarget(null);
   };
 
   return (
@@ -1097,6 +1100,8 @@ const Forms: React.FC = () => {
                                     sideOffset={6}
                                     align="end"
                                     className="w-40 rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden"
+                                    onClick={(event) => event.stopPropagation()}
+                                    onPointerDown={(event) => event.stopPropagation()}
                                   >
                                     <DropdownMenu.Item
                                       className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
@@ -1131,7 +1136,7 @@ const Forms: React.FC = () => {
                                       className="px-4 py-2 text-sm text-red-600 hover:bg-gray-100 cursor-pointer"
                                       onSelect={(event) => {
                                         event.preventDefault();
-                                        handleDeleteForm(form.id);
+                                        setDeleteFormTarget(form);
                                       }}
                                     >
                                       Delete
@@ -1379,6 +1384,47 @@ const Forms: React.FC = () => {
                   Create
                 </button>
               </div>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={Boolean(deleteFormTarget)} onOpenChange={(open) => {
+        if (!open) {
+          setDeleteFormTarget(null);
+        }
+      }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-8 shadow-2xl focus:outline-none">
+            <div className="flex items-start justify-between">
+              <Dialog.Title className="text-2xl font-semibold text-gray-900">
+                Delete this form?
+              </Dialog.Title>
+              <Dialog.Close className="text-gray-400 hover:text-gray-600 text-xl leading-none">
+                ×
+              </Dialog.Close>
+            </div>
+            <div className="mt-4 text-sm text-gray-600 leading-relaxed">
+              You're about to delete{' '}
+              <span className="text-gray-900 font-semibold">
+                {deleteFormTarget?.title ?? 'this form'}
+              </span>
+              . It will be{' '}
+              <span className="text-red-600 font-semibold">gone forever</span> and we won't be able
+              to recover it.
+            </div>
+            <div className="mt-8 flex items-center justify-end gap-3">
+              <Dialog.Close className="px-4 py-2 rounded-xl bg-gray-200 text-gray-700 text-sm hover:bg-gray-300">
+                Cancel
+              </Dialog.Close>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm hover:bg-red-700"
+                onClick={handleDeleteForm}
+              >
+                Yes, delete it
+              </button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
