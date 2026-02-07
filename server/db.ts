@@ -31,14 +31,37 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+`);
+
+try {
+  db.exec("ALTER TABLE workspaces ADD COLUMN organization_id TEXT NOT NULL DEFAULT '';");
+} catch {}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS workspace_members (
+    workspace_id TEXT NOT NULL,
+    pubkey TEXT NOT NULL,
+    role TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS organizations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   );
 `);
 
 db.exec(`
-  CREATE TABLE IF NOT EXISTS workspace_members (
-    workspace_id TEXT NOT NULL,
+  CREATE TABLE IF NOT EXISTS organization_members (
+    organization_id TEXT NOT NULL,
     pubkey TEXT NOT NULL,
     role TEXT NOT NULL,
     created_at INTEGER NOT NULL

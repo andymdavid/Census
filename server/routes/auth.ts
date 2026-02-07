@@ -14,6 +14,7 @@ import {
   NostrAuthEvent,
 } from '../services/authService';
 import { ensureDefaultWorkspace } from '../services/workspaceService';
+import { ensureDefaultOrganization } from '../services/organizationService';
 import { nip19 } from 'nostr-tools';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
@@ -62,7 +63,10 @@ export const handleVerify = async (request: Request) => {
 
   const session = createSession(event.pubkey ?? null);
   if (event.pubkey) {
-    ensureDefaultWorkspace(event.pubkey);
+    const org = ensureDefaultOrganization(event.pubkey);
+    if (org?.id) {
+      ensureDefaultWorkspace(event.pubkey, org.id);
+    }
   }
 
   return jsonResponse(

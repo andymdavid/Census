@@ -5,13 +5,14 @@ import {
   getWorkspaceMemberRole,
   isWorkspaceMember,
   listWorkspaceMembers,
-  listWorkspacesForUser,
+  listWorkspacesForOrgAndUser,
   normalizePubkey,
   addWorkspaceMember,
   removeWorkspaceMember,
   ensureDefaultWorkspace,
   renameWorkspace,
 } from '../services/workspaceService';
+import { isOrganizationMember } from '../services/organizationService';
 import { getSessionFromRequest } from '../services/sessionService';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
@@ -42,21 +43,37 @@ export const handleWorkspacesRoutes = async (request: Request) => {
   const path = url.pathname;
 
   if (request.method === 'GET' && path === '/api/workspaces') {
-    const workspaces = listWorkspacesForUser(session.pubkey);
+    const orgId = url.searchParams.get('orgId');
+    if (!orgId) {
+      return jsonResponse({ error: 'orgId is required.' }, { status: 400 });
+    }
+    if (!isOrganizationMember(orgId, session.pubkey)) {
+      return jsonResponse({ error: 'Not found' }, { status: 404 });
+    }
+    const workspaces = listWorkspacesForOrgAndUser(orgId, session.pubkey);
     if (workspaces.length === 0) {
-      ensureDefaultWorkspace(session.pubkey);
-      return jsonResponse({ workspaces: listWorkspacesForUser(session.pubkey) });
+      ensureDefaultWorkspace(session.pubkey, orgId);
+      return jsonResponse({
+        workspaces: listWorkspacesForOrgAndUser(orgId, session.pubkey),
+      });
     }
     return jsonResponse({ workspaces });
   }
 
   if (request.method === 'POST' && path === '/api/workspaces') {
-    const payload = await readJson<{ name?: string }>(request);
+    const payload = await readJson<{ name?: string; orgId?: string }>(request);
     const name = payload?.name?.trim();
     if (!name) {
       return jsonResponse({ error: 'Name is required.' }, { status: 400 });
     }
-    const created = createWorkspace(name, session.pubkey);
+    const orgId = payload?.orgId;
+    if (!orgId) {
+      return jsonResponse({ error: 'orgId is required.' }, { status: 400 });
+    }
+    if (!isOrganizationMember(orgId, session.pubkey)) {
+      return jsonResponse({ error: 'Not found' }, { status: 404 });
+    }
+    const created = createWorkspace(name, session.pubkey, orgId);
     return jsonResponse({ id: created.id });
   }
 

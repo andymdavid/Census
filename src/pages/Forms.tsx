@@ -27,6 +27,13 @@ interface WorkspaceItem {
   updated_at: number;
 }
 
+interface OrganizationItem {
+  id: string;
+  name: string;
+  created_at: number;
+  updated_at: number;
+}
+
 const defaultTheme = {
   primaryColor: '#4f46e5',
   backgroundColor: '#f5f6fa',
@@ -146,15 +153,20 @@ const Forms: React.FC = () => {
   const [profileName, setProfileName] = useState<string | null>(null);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [organizations, setOrganizations] = useState<OrganizationItem[]>([]);
+  const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null);
+  const [orgMenuOpen, setOrgMenuOpen] = useState(false);
+  const [orgModalOpen, setOrgModalOpen] = useState(false);
+  const [orgName, setOrgName] = useState('');
 
   useEffect(() => {
     let isMounted = true;
 
     const load = async () => {
       try {
-        const [meResponse, workspacesResponse] = await Promise.all([
+        const [meResponse, organizationsResponse] = await Promise.all([
           fetch('/api/auth/me', { credentials: 'include' }),
-          fetch('/api/workspaces', { credentials: 'include' }),
+          fetch('/api/organizations', { credentials: 'include' }),
         ]);
         if (isMounted) {
           if (meResponse.ok) {
@@ -165,21 +177,20 @@ const Forms: React.FC = () => {
             setNpub(nextNpub);
           }
         }
-        if (!workspacesResponse.ok) {
-          throw new Error('Failed to load workspaces.');
+        if (!organizationsResponse.ok) {
+          throw new Error('Failed to load organizations.');
         }
-        const workspaceData = (await workspacesResponse.json()) as { workspaces?: WorkspaceItem[] };
+        const orgData = (await organizationsResponse.json()) as { organizations?: OrganizationItem[] };
         if (isMounted) {
-          const list = workspaceData.workspaces ?? [];
-          setWorkspaces(list);
-          const storedWorkspaceId = localStorage.getItem('outform.activeWorkspaceId');
-          const fallbackId = list[0]?.id ?? null;
-          const nextId = storedWorkspaceId && workspaceData.workspaces?.some((w) => w.id === storedWorkspaceId)
-            ? storedWorkspaceId
-            : fallbackId;
-          setActiveWorkspaceId(nextId);
-          if (nextId) {
-            localStorage.setItem('outform.activeWorkspaceId', nextId);
+          const list = orgData.organizations ?? [];
+          setOrganizations(list);
+          const storedOrgId = localStorage.getItem('outform.activeOrganizationId');
+          const fallbackOrgId = list[0]?.id ?? null;
+          const nextOrgId =
+            storedOrgId && list.some((org) => org.id === storedOrgId) ? storedOrgId : fallbackOrgId;
+          setActiveOrganizationId(nextOrgId);
+          if (nextOrgId) {
+            localStorage.setItem('outform.activeOrganizationId', nextOrgId);
           }
         }
       } catch (err) {
@@ -199,6 +210,49 @@ const Forms: React.FC = () => {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadWorkspaces = async () => {
+      if (!activeOrganizationId) return;
+      try {
+        const response = await fetch(`/api/workspaces?orgId=${activeOrganizationId}`, {
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          throw new Error('Failed to load workspaces.');
+        }
+        const data = (await response.json()) as { workspaces?: WorkspaceItem[] };
+        if (isMounted) {
+          const list = data.workspaces ?? [];
+          setWorkspaces(list);
+          const storedWorkspaceId = localStorage.getItem(
+            `outform.activeWorkspaceId.${activeOrganizationId}`
+          );
+          const fallbackId = list[0]?.id ?? null;
+          const nextId =
+            storedWorkspaceId && list.some((w) => w.id === storedWorkspaceId)
+              ? storedWorkspaceId
+              : fallbackId;
+          setActiveWorkspaceId(nextId);
+          if (nextId) {
+            localStorage.setItem(`outform.activeWorkspaceId.${activeOrganizationId}`, nextId);
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Unknown error');
+        }
+      }
+    };
+
+    loadWorkspaces();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeOrganizationId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -362,6 +416,31 @@ const Forms: React.FC = () => {
     setInviteValue('');
   };
 
+  const handleCreateOrganization = async () => {
+    const trimmed = orgName.trim();
+    if (!trimmed) return;
+    const response = await fetch('/api/organizations', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    if (!response.ok) return;
+    const data = (await response.json()) as { id?: string };
+    if (data.id) {
+      const newOrg: OrganizationItem = {
+        id: data.id,
+        name: trimmed,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      };
+      setOrganizations((prev) => [...prev, newOrg]);
+      setActiveOrganization(data.id);
+      setOrgName('');
+      setOrgModalOpen(false);
+    }
+  };
+
   const createForm = async (schema: FormSchemaV0, title: string) => {
     setCreating(true);
     try {
@@ -400,6 +479,8 @@ const Forms: React.FC = () => {
   const avatarLabel = pubkey ? pubkey.slice(0, 2).toUpperCase() : 'OF';
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   const workspaceLabel = activeWorkspace?.name ?? 'Workspace';
+  const activeOrganization = organizations.find((org) => org.id === activeOrganizationId);
+  const organizationLabel = activeOrganization?.name ?? 'Organization';
   const shortNpub = npub ? `${npub.slice(0, 10)}…${npub.slice(-4)}` : null;
 
   const handleCopyNpub = async () => {
@@ -415,11 +496,25 @@ const Forms: React.FC = () => {
 
   const setActiveWorkspace = (nextId: string | null) => {
     setActiveWorkspaceId(nextId);
-    if (nextId) {
-      localStorage.setItem('outform.activeWorkspaceId', nextId);
-    } else {
-      localStorage.removeItem('outform.activeWorkspaceId');
+    if (activeOrganizationId) {
+      const storageKey = `outform.activeWorkspaceId.${activeOrganizationId}`;
+      if (nextId) {
+        localStorage.setItem(storageKey, nextId);
+      } else {
+        localStorage.removeItem(storageKey);
+      }
     }
+  };
+
+  const setActiveOrganization = (nextId: string | null) => {
+    setActiveOrganizationId(nextId);
+    if (nextId) {
+      localStorage.setItem('outform.activeOrganizationId', nextId);
+    } else {
+      localStorage.removeItem('outform.activeOrganizationId');
+    }
+    setActiveWorkspaceId(null);
+    setWorkspaces([]);
   };
 
   const handleRenameWorkspace = async () => {
@@ -669,12 +764,12 @@ const Forms: React.FC = () => {
                               className="px-4 py-2 rounded-xl bg-[#177767] text-white text-sm hover:bg-[#146957] transition"
                               onClick={async () => {
                                 const trimmed = workspaceName.trim();
-                                if (!trimmed) return;
+                                if (!trimmed || !activeOrganizationId) return;
                                 const response = await fetch('/api/workspaces', {
                                   method: 'POST',
                                   credentials: 'include',
                                   headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ name: trimmed }),
+                                  body: JSON.stringify({ name: trimmed, orgId: activeOrganizationId }),
                                 });
                                 if (!response.ok) return;
                                 const data = (await response.json()) as { id?: string };
@@ -730,12 +825,60 @@ const Forms: React.FC = () => {
               </div>
 
               <div className="mt-auto pt-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-gray-900 text-white flex items-center justify-center text-xs font-semibold">
-                    OS
-                  </div>
-                  <div className="text-sm font-medium text-gray-700">{workspaceLabel}</div>
-                </div>
+                <DropdownMenu.Root open={orgMenuOpen} onOpenChange={setOrgMenuOpen}>
+                  <DropdownMenu.Trigger asChild>
+                    <button className="w-full flex items-center gap-3 text-left">
+                      <div className="h-10 w-10 rounded-lg bg-emerald-700/80 text-white text-xs font-semibold flex items-center justify-center">
+                        OS
+                      </div>
+                      <div className="text-sm font-medium text-gray-700">{organizationLabel}</div>
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      sideOffset={10}
+                      side="top"
+                      align="start"
+                      className="w-64 rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden"
+                    >
+                      <div className="px-4 py-3 text-xs uppercase tracking-wide text-gray-400">
+                        Organizations
+                      </div>
+                      {organizations.map((org) => (
+                        <DropdownMenu.Item
+                          key={org.id}
+                          className={`px-4 py-2 text-sm cursor-pointer flex items-center justify-between ${
+                            org.id === activeOrganizationId
+                              ? 'bg-gray-100 text-gray-800'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                          onSelect={() => setActiveOrganization(org.id)}
+                        >
+                          <span>{org.name}</span>
+                          {org.id === activeOrganizationId && <span className="text-xs">✓</span>}
+                        </DropdownMenu.Item>
+                      ))}
+                      <DropdownMenu.Separator className="h-px bg-gray-100" />
+                      <DropdownMenu.Item
+                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                        onSelect={() => setOrgModalOpen(true)}
+                      >
+                        Create organization
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Separator className="h-px bg-gray-100" />
+                      <DropdownMenu.Item
+                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                      >
+                        Admin settings
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                      >
+                        Org members
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
               </div>
             </aside>
 
@@ -848,12 +991,14 @@ const Forms: React.FC = () => {
               {activeWorkspaceId && (
                 <>
 
-                  <div className="grid grid-cols-[1fr_120px_120px_140px_80px] text-xs text-gray-400 px-6 py-2">
-                    <div>Forms</div>
-                    <div>Responses</div>
-                    <div>Completion</div>
-                    <div>Updated</div>
-                    <div className="text-right">Actions</div>
+                  <div className="px-6 py-2">
+                    <div className="grid grid-cols-[1fr_120px_120px_140px_80px] text-xs text-gray-400 max-w-5xl">
+                      <div>Forms</div>
+                      <div>Responses</div>
+                      <div>Completion</div>
+                      <div>Updated</div>
+                      <div className="text-right">Actions</div>
+                    </div>
                   </div>
 
                   {loading && <div className="text-gray-500 px-6 py-6">Loading...</div>}
@@ -872,7 +1017,7 @@ const Forms: React.FC = () => {
                         return (
                           <div
                             key={form.id}
-                            className="bg-white border border-gray-200 rounded-xl px-4 py-3 grid grid-cols-[1fr_120px_120px_140px_80px] items-center hover:border-primary/40 hover:shadow-sm transition"
+                            className="bg-white border border-gray-200 rounded-xl px-4 py-3 grid grid-cols-[1fr_120px_120px_140px_80px] items-center hover:border-primary/40 hover:shadow-sm transition max-w-5xl"
                           >
                             <div className="flex items-center gap-3">
                               <div className="h-10 w-10 rounded-lg bg-emerald-700/80 text-white text-xs font-semibold flex items-center justify-center">
@@ -880,9 +1025,9 @@ const Forms: React.FC = () => {
                               </div>
                               <div>
                                 <div className="text-sm font-medium text-gray-800">{form.title}</div>
-                                <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                                <div className="text-[11px] text-gray-500 mt-1 flex items-center gap-2">
                                   <span
-                                    className={`of-badge ${
+                                    className={`of-badge px-2 py-0.5 text-[11px] ${
                                       form.published
                                         ? 'bg-emerald-100 text-emerald-700'
                                         : 'bg-gray-100 text-gray-600'
@@ -890,7 +1035,9 @@ const Forms: React.FC = () => {
                                   >
                                     {form.published ? 'Published' : 'Draft'}
                                   </span>
-                                  <span className="of-pill">{form.responses_count ?? 0} responses</span>
+                                  <span className="of-pill text-[11px] px-2 py-0.5">
+                                    {form.responses_count ?? 0} responses
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -899,28 +1046,42 @@ const Forms: React.FC = () => {
                             <div className="text-sm text-gray-600">
                               {new Date(form.updated_at).toLocaleDateString()}
                             </div>
-                            <div className="flex items-center justify-end gap-3 text-sm">
-                              <Link
-                                to={`/forms/${form.id}/edit`}
-                                className="text-gray-600 hover:text-gray-800"
-                              >
-                                Edit
-                              </Link>
-                              <Link
-                                to={`/forms/${form.id}/analytics`}
-                                className="text-gray-600 hover:text-gray-800"
-                              >
-                                Analytics
-                              </Link>
-                              <Link
-                                to={`/f/${form.id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-gray-600 hover:text-gray-800"
-                              >
-                                Share
-                              </Link>
-                              <button className="text-gray-400 hover:text-gray-600">···</button>
+                            <div className="flex items-center justify-end">
+                              <DropdownMenu.Root>
+                                <DropdownMenu.Trigger asChild>
+                                  <button className="text-gray-400 hover:text-gray-600">···</button>
+                                </DropdownMenu.Trigger>
+                                <DropdownMenu.Portal>
+                                  <DropdownMenu.Content
+                                    sideOffset={6}
+                                    align="end"
+                                    className="w-40 rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden"
+                                  >
+                                    <DropdownMenu.Item
+                                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                                      onSelect={() => navigate(`/forms/${form.id}/edit`)}
+                                    >
+                                      Edit
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item
+                                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                                      onSelect={() => navigate(`/forms/${form.id}/analytics`)}
+                                    >
+                                      Analytics
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item
+                                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                                      onSelect={() => {
+                                        navigator.clipboard.writeText(
+                                          `${window.location.origin}/f/${form.id}`
+                                        );
+                                      }}
+                                    >
+                                      Share
+                                    </DropdownMenu.Item>
+                                  </DropdownMenu.Content>
+                                </DropdownMenu.Portal>
+                              </DropdownMenu.Root>
                             </div>
                           </div>
                         );
@@ -930,7 +1091,27 @@ const Forms: React.FC = () => {
                 </>
               )}
 
-              {!loading && !error && !activeWorkspaceId && (
+              {!loading && !error && !activeOrganizationId && (
+                <div className="px-6 pb-6">
+                  <div className="bg-white border border-gray-200 rounded-xl p-6">
+                    <div className="text-base font-semibold text-gray-800">
+                      Create your first organization
+                    </div>
+                    <div className="text-sm text-gray-500 mt-2">
+                      Organizations group workspaces and members.
+                    </div>
+                    <button
+                      type="button"
+                      className="mt-4 inline-flex items-center rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:border-gray-300"
+                      onClick={() => setOrgModalOpen(true)}
+                    >
+                      Create organization
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!loading && !error && activeOrganizationId && !activeWorkspaceId && (
                 <div className="px-6 pb-6">
                   <div className="bg-white border border-gray-200 rounded-xl p-6">
                     <div className="text-base font-semibold text-gray-800">
@@ -1083,6 +1264,55 @@ const Forms: React.FC = () => {
               <Dialog.Close className="text-sm text-gray-600 hover:text-gray-800">
                 Close
               </Dialog.Close>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={orgModalOpen} onOpenChange={setOrgModalOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl focus:outline-none">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <Dialog.Title className="text-lg font-semibold text-gray-900">
+                  New organization
+                </Dialog.Title>
+                <Dialog.Description className="text-sm text-gray-500 mt-1">
+                  Create an organization to group workspaces.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-xl border border-gray-200">
+                Close
+              </Dialog.Close>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="org-name" className="text-xs text-gray-500">
+                  Organization name
+                </label>
+                <input
+                  id="org-name"
+                  type="text"
+                  value={orgName}
+                  onChange={(event) => setOrgName(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g. Other Stuff"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Dialog.Close className="text-sm text-gray-600 hover:text-gray-800 px-3 py-2">
+                  Cancel
+                </Dialog.Close>
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl bg-[#177767] text-white text-sm hover:bg-[#146957] transition"
+                  onClick={handleCreateOrganization}
+                >
+                  Create
+                </button>
+              </div>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
