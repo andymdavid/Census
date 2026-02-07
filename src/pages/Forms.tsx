@@ -1041,17 +1041,27 @@ const Forms: React.FC = () => {
                         return (
                           <div
                             key={form.id}
-                            className="bg-white border border-gray-200 rounded-xl px-4 py-3 grid grid-cols-[1fr_120px_120px_140px_80px] items-center hover:border-primary/40 hover:shadow-sm transition"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => navigate(`/forms/${form.id}/edit`)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                navigate(`/forms/${form.id}/edit`);
+                              }
+                            }}
+                            className="bg-white border border-gray-200 rounded-xl px-3 py-2 grid grid-cols-[1fr_120px_120px_140px_80px] items-center hover:border-primary/40 hover:shadow-sm transition cursor-pointer"
                           >
-                            <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-lg bg-emerald-700/80 text-white text-xs font-semibold flex items-center justify-center">
+                            <div className="flex items-center gap-4">
+                              <div className="h-8 w-8 rounded-lg bg-emerald-700/80 text-white text-[11px] font-semibold flex items-center justify-center">
                                 OF
                               </div>
                               <div>
-                                <div className="text-sm font-medium text-gray-800">{form.title}</div>
-                                <div className="text-[11px] text-gray-500 mt-1 flex items-center gap-2">
+                                <div className="flex items-center gap-4">
+                                  <div className="text-[14px] font-semibold text-gray-800 leading-tight">
+                                    {form.title}
+                                  </div>
                                   <span
-                                    className={`of-badge px-2 py-0.5 text-[11px] ${
+                                    className={`of-badge-sm ${
                                       form.published
                                         ? 'bg-emerald-100 text-emerald-700'
                                         : 'bg-gray-100 text-gray-600'
@@ -1059,7 +1069,7 @@ const Forms: React.FC = () => {
                                   >
                                     {form.published ? 'Published' : 'Draft'}
                                   </span>
-                                  <span className="of-pill text-[11px] px-2 py-0.5">
+                                  <span className="of-pill-sm">
                                     {form.responses_count ?? 0} responses
                                   </span>
                                 </div>
@@ -1075,7 +1085,12 @@ const Forms: React.FC = () => {
                             <div className="flex items-center justify-end">
                               <DropdownMenu.Root>
                                 <DropdownMenu.Trigger asChild>
-                                  <button className="text-gray-400 hover:text-gray-600">···</button>
+                                  <button
+                                    className="text-gray-400 hover:text-gray-600"
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    ···
+                                  </button>
                                 </DropdownMenu.Trigger>
                                 <DropdownMenu.Portal>
                                   <DropdownMenu.Content
@@ -1085,19 +1100,26 @@ const Forms: React.FC = () => {
                                   >
                                     <DropdownMenu.Item
                                       className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                                      onSelect={() => navigate(`/forms/${form.id}/edit`)}
+                                      onSelect={(event) => {
+                                        event.preventDefault();
+                                        navigate(`/forms/${form.id}/edit`);
+                                      }}
                                     >
                                       Edit
                                     </DropdownMenu.Item>
                                     <DropdownMenu.Item
                                       className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                                      onSelect={() => navigate(`/forms/${form.id}/analytics`)}
+                                      onSelect={(event) => {
+                                        event.preventDefault();
+                                        navigate(`/forms/${form.id}/analytics`);
+                                      }}
                                     >
                                       Analytics
                                     </DropdownMenu.Item>
                                     <DropdownMenu.Item
                                       className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                                      onSelect={() => {
+                                      onSelect={(event) => {
+                                        event.preventDefault();
                                         navigator.clipboard.writeText(
                                           `${window.location.origin}/f/${form.id}`
                                         );
@@ -1107,7 +1129,10 @@ const Forms: React.FC = () => {
                                     </DropdownMenu.Item>
                                     <DropdownMenu.Item
                                       className="px-4 py-2 text-sm text-red-600 hover:bg-gray-100 cursor-pointer"
-                                      onSelect={() => handleDeleteForm(form.id)}
+                                      onSelect={(event) => {
+                                        event.preventDefault();
+                                        handleDeleteForm(form.id);
+                                      }}
                                     >
                                       Delete
                                     </DropdownMenu.Item>

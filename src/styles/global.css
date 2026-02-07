@@ -164,6 +164,14 @@ body {
   @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600;
 }
 
+.of-badge-sm {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-[10px] leading-none font-medium;
+}
+
+.of-pill-sm {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-[10px] leading-none font-medium bg-gray-100 text-gray-600;
+}
+
 .typeform-fullscreen-scroll {
   @apply overflow-y-auto;
 }
