@@ -1210,6 +1210,16 @@ const Builder: React.FC = () => {
                             );
                           })()}
                         </div>
+                      ) : inferredAnswerType === 'email' ? (
+                        <div className="w-full">
+                          <input
+                            type="text"
+                            value=""
+                            readOnly
+                            className="w-full bg-transparent text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
+                            placeholder="name@example.com"
+                          />
+                        </div>
                       ) : (
                         <div className="min-w-[280px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
                           Answer

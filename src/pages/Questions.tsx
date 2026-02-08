@@ -623,7 +623,37 @@ const Questions: React.FC<QuestionsProps> = ({
                   disabled={!canContinue}
                 >
                   Continue
-                  </motion.button>
+                </motion.button>
+              </motion.div>
+            ) : answerType === 'email' ? (
+              <motion.div variants={itemVariants} className="w-full">
+                <input
+                  type="email"
+                  value={typeof currentAnswer === 'string' ? currentAnswer : ''}
+                  onChange={(event) =>
+                    setAnswers((prev) => ({ ...prev, [currentQuestionId]: event.target.value }))
+                  }
+                  className="w-full bg-transparent text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
+                  placeholder="name@example.com"
+                />
+                <motion.button
+                  onClick={() => {
+                    if (!canContinue) return;
+                    void proceedToNext(
+                      { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
+                      hasAnswer(currentAnswer)
+                    );
+                  }}
+                  className={`typeform-option-button mt-6 ${
+                    canContinue ? 'typeform-option-yes' : 'typeform-option-no'
+                  }`}
+                  variants={buttonVariants}
+                  whileHover={canContinue ? 'hover' : undefined}
+                  whileTap={canContinue ? 'tap' : undefined}
+                  disabled={!canContinue}
+                >
+                  Continue
+                </motion.button>
               </motion.div>
             ) : (
               <motion.div 
