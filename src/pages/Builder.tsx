@@ -1015,9 +1015,11 @@ const Builder: React.FC = () => {
                           inferredAnswerType === 'long' ? 'max-w-none' : 'max-w-[400px]'
                         }`}
                       >
-                      <div className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2">
-                        <span className="whitespace-nowrap min-w-[28px] pt-2">{selectedQuestion.id}</span>
-                        <span className="whitespace-nowrap pt-2">→</span>
+                      <div className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2 w-full">
+                        <div className="flex items-start gap-2 flex-shrink-0">
+                          <span className="whitespace-nowrap min-w-[28px] pt-2">{selectedQuestion.id}</span>
+                          <span className="whitespace-nowrap pt-2">→</span>
+                        </div>
                         <textarea
                           ref={questionTitleRef}
                           rows={1}
@@ -1036,7 +1038,7 @@ const Builder: React.FC = () => {
                           placeholder="Your question here. Recall information with @"
                         />
                         {selectedSettings.required && (
-                          <span className="text-red-500 font-semibold pt-2">*</span>
+                          <span className="text-red-500 font-semibold pt-2 flex-shrink-0">*</span>
                         )}
                       </div>
                       <input
