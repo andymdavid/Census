@@ -1038,7 +1038,7 @@ const Builder: React.FC = () => {
                               questionTitleRef.current.style.height = `${questionTitleRef.current.scrollHeight}px`;
                             }
                           }}
-                          className="text-gray-800 text-3xl font-semibold bg-transparent focus:outline-none w-full min-w-0 resize-none leading-snug"
+                          className="text-gray-800 text-[20px] font-semibold bg-transparent focus:outline-none w-full min-w-0 resize-none leading-snug"
                           placeholder="Your question here. Recall information with @"
                         />
                         {selectedSettings.required && (
