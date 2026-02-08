@@ -292,6 +292,23 @@ const Builder: React.FC = () => {
   const isSelectedWelcome = selectedQuestion?.category === 'Welcome Screen';
   const isSelectedEnd = selectedQuestion?.category === 'End Screen';
   const selectedSettings = selectedQuestion?.settings ?? {};
+  const inferredAnswerType =
+    selectedSettings.answerType ??
+    (selectedQuestion?.category === 'Multiple Choice'
+      ? 'multiple'
+      : selectedQuestion?.category === 'Yes/No'
+        ? 'yesno'
+        : selectedQuestion?.category === 'Long Text'
+          ? 'long'
+          : selectedQuestion?.category === 'Short Text'
+            ? 'short'
+            : selectedQuestion?.category === 'Email'
+              ? 'email'
+              : selectedQuestion?.category === 'Number'
+                ? 'number'
+                : selectedQuestion?.category === 'Date'
+                  ? 'date'
+                  : 'short');
 
   useEffect(() => {
     let isMounted = true;
@@ -993,7 +1010,7 @@ const Builder: React.FC = () => {
                     >
                       <div
                         className={`w-fit flex flex-col items-start text-left ${
-                          selectedSettings.answerType === 'long' ? 'max-w-[720px]' : 'max-w-[400px]'
+                          inferredAnswerType === 'long' ? 'max-w-[720px]' : 'max-w-[400px]'
                         }`}
                       >
                       <div className="text-sm text-blue-600 font-medium mb-2 flex items-center gap-2 flex-nowrap">
@@ -1046,7 +1063,7 @@ const Builder: React.FC = () => {
                         </div>
                       )}
 
-                      {selectedSettings.answerType === 'multiple' ? (
+                      {inferredAnswerType === 'multiple' ? (
                         <div className="flex flex-col gap-3 w-full items-start">
                           {[
                             ...(selectedSettings.choices ?? ['Choice A']),
@@ -1092,7 +1109,7 @@ const Builder: React.FC = () => {
                             </button>
                           </div>
                         </div>
-                      ) : selectedSettings.answerType === 'yesno' ? (
+                      ) : inferredAnswerType === 'yesno' ? (
                         <div className="flex flex-col gap-3 w-full items-start">
                           {['Yes', 'No'].map((choice) => (
                             <div key={choice} className="flex items-center gap-3 w-full">
@@ -1105,7 +1122,7 @@ const Builder: React.FC = () => {
                             </div>
                           ))}
                         </div>
-                      ) : selectedSettings.answerType === 'long' ? (
+                      ) : inferredAnswerType === 'long' ? (
                         <div className="w-full">
                           <textarea
                             rows={3}
@@ -1303,7 +1320,7 @@ const Builder: React.FC = () => {
                         <div>
                           <label className="of-label">Answer</label>
                           <select
-                            value={selectedSettings.answerType ?? 'multiple'}
+                            value={inferredAnswerType ?? 'multiple'}
                             onChange={(event) =>
                               updateSelectedQuestionSettings((settings) => ({
                                 ...settings,
@@ -1327,13 +1344,13 @@ const Builder: React.FC = () => {
                         <div className="space-y-3">
                           {questionToggleSettings
                             .filter(({ key }) => {
-                              if (selectedSettings.answerType === 'yesno') {
+                              if (inferredAnswerType === 'yesno') {
                                 return key === 'required';
                               }
-                              if (selectedSettings.answerType === 'multiple') {
+                              if (inferredAnswerType === 'multiple') {
                                 return key === 'required' || key === 'multipleSelection' || key === 'otherOption';
                               }
-                              if (selectedSettings.answerType === 'long') {
+                              if (inferredAnswerType === 'long') {
                                 return key === 'required';
                               }
                               return key === 'required';
@@ -1357,7 +1374,7 @@ const Builder: React.FC = () => {
                           ))}
                         </div>
 
-                        {selectedSettings.answerType === 'long' && (
+                        {inferredAnswerType === 'long' && (
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
                               <div className="text-sm text-gray-600">Max characters</div>

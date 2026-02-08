@@ -220,7 +220,23 @@ const Questions: React.FC<QuestionsProps> = ({
   const currentIndex = currentIndexRaw === -1 ? 0 : currentIndexRaw;
   const currentStep = history.length + 1;
   const score = computeScore(answers);
-  const answerType = question?.settings?.answerType ?? 'yesno';
+  const answerType =
+    question?.settings?.answerType ??
+    (question?.category === 'Multiple Choice'
+      ? 'multiple'
+      : question?.category === 'Yes/No'
+        ? 'yesno'
+        : question?.category === 'Long Text'
+          ? 'long'
+          : question?.category === 'Short Text'
+            ? 'short'
+            : question?.category === 'Email'
+              ? 'email'
+              : question?.category === 'Number'
+                ? 'number'
+                : question?.category === 'Date'
+                  ? 'date'
+                  : 'yesno');
   const isRequired = Boolean(question?.settings?.required);
   const currentAnswer = answers[currentQuestionId];
   const canContinue = !isRequired || hasAnswer(currentAnswer);
