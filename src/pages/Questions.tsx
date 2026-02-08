@@ -560,29 +560,82 @@ const Questions: React.FC<QuestionsProps> = ({
                   <span className="font-medium">Shift</span> + Enter ↵ to make a line break
                 </div>
                 <motion.button
-                        onClick={() => {
-                          if (!canContinue) return;
-                          void proceedToNext(
-                            { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
-                            hasAnswer(currentAnswer)
-                          );
-                        }}
-                        className={`typeform-option-button mt-6 ${
-                          canContinue ? 'typeform-option-yes' : 'typeform-option-no'
-                        }`}
-                        variants={buttonVariants}
-                        whileHover={canContinue ? 'hover' : undefined}
-                        whileTap={canContinue ? 'tap' : undefined}
-                        disabled={!canContinue}
-                      >
-                        Continue
-                      </motion.button>
-                    </motion.div>
-                  ) : (
-                    <motion.div 
-                      variants={itemVariants}
-                      className="typeform-options"
-                    >
+                  onClick={() => {
+                    if (!canContinue) return;
+                    void proceedToNext(
+                      { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
+                      hasAnswer(currentAnswer)
+                    );
+                  }}
+                  className={`typeform-option-button mt-6 ${
+                    canContinue ? 'typeform-option-yes' : 'typeform-option-no'
+                  }`}
+                  variants={buttonVariants}
+                  whileHover={canContinue ? 'hover' : undefined}
+                  whileTap={canContinue ? 'tap' : undefined}
+                  disabled={!canContinue}
+                >
+                  Continue
+                </motion.button>
+              </motion.div>
+            ) : answerType === 'date' ? (
+              <motion.div variants={itemVariants} className="w-full">
+                <div className="flex items-end gap-6 text-blue-700 text-sm">
+                  <div className="flex flex-col gap-2">
+                    <span>Month</span>
+                    <input
+                      type="text"
+                      placeholder="MM"
+                      className="w-[110px] text-[36px] text-blue-200 bg-transparent border-b border-blue-400 focus:outline-none"
+                    />
+                  </div>
+                  <div className="text-[36px] text-blue-700 pb-2">
+                    {question.settings?.dateSeparator ?? '/'}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <span>Day</span>
+                    <input
+                      type="text"
+                      placeholder="DD"
+                      className="w-[110px] text-[36px] text-blue-200 bg-transparent border-b border-blue-400 focus:outline-none"
+                    />
+                  </div>
+                  <div className="text-[36px] text-blue-700 pb-2">
+                    {question.settings?.dateSeparator ?? '/'}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <span>Year</span>
+                    <input
+                      type="text"
+                      placeholder="YYYY"
+                      className="w-[160px] text-[36px] text-blue-200 bg-transparent border-b border-blue-400 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <motion.button
+                  onClick={() => {
+                    if (!canContinue) return;
+                    void proceedToNext(
+                      { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
+                      hasAnswer(currentAnswer)
+                    );
+                  }}
+                  className={`typeform-option-button mt-6 ${
+                    canContinue ? 'typeform-option-yes' : 'typeform-option-no'
+                  }`}
+                  variants={buttonVariants}
+                  whileHover={canContinue ? 'hover' : undefined}
+                  whileTap={canContinue ? 'tap' : undefined}
+                  disabled={!canContinue}
+                >
+                  Continue
+                </motion.button>
+              </motion.div>
+            ) : (
+              <motion.div 
+                variants={itemVariants}
+                className="typeform-options"
+              >
                       <motion.button
                         onClick={() => handleAnswer(true)}
                         className="typeform-option-button typeform-option-yes"

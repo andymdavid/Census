@@ -35,6 +35,8 @@ export interface FormQuestionSettings {
   mediaUrl?: string;
   maxCharactersEnabled?: boolean;
   maxCharacters?: number;
+  dateFormat?: 'MMDDYYYY' | 'DDMMYYYY' | 'YYYYMMDD';
+  dateSeparator?: '/' | '-' | '.';
 }
 
 export interface FormResultThreshold {

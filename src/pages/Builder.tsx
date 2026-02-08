@@ -1158,6 +1158,29 @@ const Builder: React.FC = () => {
                             <span className="font-medium">Shift</span> + Enter ↵ to make a line break
                           </div>
                         </div>
+                      ) : inferredAnswerType === 'date' ? (
+                        <div className="w-full">
+                          <div className="flex items-end gap-6 text-blue-700 text-sm">
+                            <div className="flex flex-col gap-2">
+                              <span>Month</span>
+                              <div className="text-[36px] text-blue-200 border-b border-blue-400 pb-2">MM</div>
+                            </div>
+                            <div className="text-[36px] text-blue-700 pb-2">
+                              {selectedSettings.dateSeparator ?? '/'}
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <span>Day</span>
+                              <div className="text-[36px] text-blue-200 border-b border-blue-400 pb-2">DD</div>
+                            </div>
+                            <div className="text-[36px] text-blue-700 pb-2">
+                              {selectedSettings.dateSeparator ?? '/'}
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <span>Year</span>
+                              <div className="text-[36px] text-blue-200 border-b border-blue-400 pb-2">YYYY</div>
+                            </div>
+                          </div>
+                        </div>
                       ) : (
                         <div className="min-w-[280px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
                           Answer
@@ -1377,6 +1400,9 @@ const Builder: React.FC = () => {
                               if (inferredAnswerType === 'long') {
                                 return key === 'required';
                               }
+                              if (inferredAnswerType === 'date') {
+                                return key === 'required';
+                              }
                               return key === 'required';
                             })
                             .map(({ label, key }) => (
@@ -1430,6 +1456,48 @@ const Builder: React.FC = () => {
                                 placeholder="0-9999999999"
                               />
                             )}
+                          </div>
+                        )}
+
+                        {inferredAnswerType === 'date' && (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="of-label">Date format</label>
+                              <div className="flex gap-2">
+                                <select
+                                  value={selectedSettings.dateFormat ?? 'MMDDYYYY'}
+                                  onChange={(event) =>
+                                    updateSelectedQuestionSettings((settings) => ({
+                                      ...settings,
+                                      dateFormat: event.target.value as NonNullable<
+                                        FormQuestionSettings['dateFormat']
+                                      >,
+                                    }))
+                                  }
+                                  className="of-input"
+                                >
+                                  <option value="MMDDYYYY">MMDDYYYY</option>
+                                  <option value="DDMMYYYY">DDMMYYYY</option>
+                                  <option value="YYYYMMDD">YYYYMMDD</option>
+                                </select>
+                                <select
+                                  value={selectedSettings.dateSeparator ?? '/'}
+                                  onChange={(event) =>
+                                    updateSelectedQuestionSettings((settings) => ({
+                                      ...settings,
+                                      dateSeparator: event.target.value as NonNullable<
+                                        FormQuestionSettings['dateSeparator']
+                                      >,
+                                    }))
+                                  }
+                                  className="of-input w-16 text-center"
+                                >
+                                  <option value="/">/</option>
+                                  <option value="-">-</option>
+                                  <option value=".">.</option>
+                                </select>
+                              </div>
+                            </div>
                           </div>
                         )}
 
