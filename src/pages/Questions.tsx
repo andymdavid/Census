@@ -605,8 +605,6 @@ const Questions: React.FC<QuestionsProps> = ({
                 </div>
               </div>
             </div>
-            </div>
-
             {/* Back button - only show if not on first question */}
             {history.length > 0 && (
               <motion.button
