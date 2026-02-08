@@ -286,6 +286,9 @@ const Builder: React.FC = () => {
   ];
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const questionTitleRef = useRef<HTMLTextAreaElement | null>(null);
+  const questionTitleMeasureRef = useRef<HTMLSpanElement | null>(null);
+  const questionTitleContainerRef = useRef<HTMLDivElement | null>(null);
+  const [questionTitleWidth, setQuestionTitleWidth] = useState<number | null>(null);
 
   const selectedQuestion = schema.questions.find((question) => question.id === selectedQuestionId);
   const questionOptions = schema.questions.map((question) => question.id);
@@ -475,6 +478,20 @@ const Builder: React.FC = () => {
       questionTitleRef.current.style.height = `${questionTitleRef.current.scrollHeight}px`;
     }
   }, [selectedQuestion?.text, selectedQuestionId]);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (!questionTitleMeasureRef.current || !questionTitleContainerRef.current) return;
+      const measured = questionTitleMeasureRef.current.offsetWidth;
+      const containerWidth = questionTitleContainerRef.current.offsetWidth;
+      if (measured && containerWidth) {
+        setQuestionTitleWidth(Math.min(measured + 4, containerWidth));
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, [selectedQuestion?.text]);
 
   const updateQuestion = (
     questionId: number,
@@ -1028,7 +1045,10 @@ const Builder: React.FC = () => {
                           <span className="whitespace-nowrap">→</span>
                         </div>
                         <div className="flex flex-col items-start text-left">
-                        <div className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2 w-full">
+                        <div
+                          ref={questionTitleContainerRef}
+                          className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2 w-full relative"
+                        >
                           <textarea
                             ref={questionTitleRef}
                             rows={1}
@@ -1045,7 +1065,15 @@ const Builder: React.FC = () => {
                             }}
                             className="text-gray-800 text-[20px] font-semibold bg-transparent focus:outline-none w-full min-w-0 resize-none leading-snug"
                             placeholder="Your question here. Recall information with @"
+                            style={questionTitleWidth ? { width: questionTitleWidth } : undefined}
                           />
+                          <span
+                            ref={questionTitleMeasureRef}
+                            className="text-gray-800 text-[20px] font-semibold leading-snug absolute opacity-0 pointer-events-none whitespace-pre -left-[9999px]"
+                            aria-hidden
+                          >
+                            {selectedQuestion.text || 'Your question here. Recall information with @'}
+                          </span>
                           {selectedSettings.required && (
                             <span className="text-red-500 font-semibold pt-1 flex-shrink-0">*</span>
                           )}
