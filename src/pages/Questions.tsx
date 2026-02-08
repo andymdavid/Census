@@ -541,24 +541,25 @@ const Questions: React.FC<QuestionsProps> = ({
                         </motion.button>
                       )}
                     </motion.div>
-                  ) : answerType === 'long' ? (
-                    <motion.div variants={itemVariants} className="w-full">
-                      <textarea
-                        rows={3}
-                        value={typeof currentAnswer === 'string' ? currentAnswer : ''}
-                        onChange={(event) =>
-                          setAnswers((prev) => ({ ...prev, [currentQuestionId]: event.target.value }))
-                        }
-                        maxLength={
-                          question.settings?.maxCharactersEnabled ? question.settings.maxCharacters ?? undefined : undefined
-                        }
-                        className="w-full bg-transparent text-4xl text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none"
-                        placeholder="Type your answer here..."
-                      />
-                      <div className="mt-3 text-sm text-blue-700">
-                        <span className="font-medium">Shift</span> + Enter ↵ to make a line break
-                      </div>
-                      <motion.button
+            ) : answerType === 'long' ? (
+              <motion.div variants={itemVariants} className="w-full">
+                <textarea
+                  rows={1}
+                  value={typeof currentAnswer === 'string' ? currentAnswer : ''}
+                  onChange={(event) =>
+                    setAnswers((prev) => ({ ...prev, [currentQuestionId]: event.target.value }))
+                  }
+                  maxLength={
+                    question.settings?.maxCharactersEnabled ? question.settings.maxCharacters ?? undefined : undefined
+                  }
+                  className="w-full bg-transparent text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none p-0 leading-[1.1] h-[44px]"
+                  style={{ fontSize: '28px' }}
+                  placeholder="Type your answer here..."
+                />
+                <div className="text-sm text-blue-700" style={{ marginTop: '2px' }}>
+                  <span className="font-medium">Shift</span> + Enter ↵ to make a line break
+                </div>
+                <motion.button
                         onClick={() => {
                           if (!canContinue) return;
                           void proceedToNext(

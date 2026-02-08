@@ -1139,13 +1139,14 @@ const Builder: React.FC = () => {
                       ) : inferredAnswerType === 'long' ? (
                         <div className="w-full">
                           <textarea
-                            rows={3}
+                            rows={1}
                             value=""
                             readOnly
-                            className="w-full bg-transparent text-4xl text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none pointer-events-none"
+                            className="w-full bg-transparent text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none pointer-events-none p-0 leading-[1.1] h-[44px]"
+                            style={{ fontSize: '28px' }}
                             placeholder="Type your answer here..."
                           />
-                          <div className="mt-3 text-sm text-blue-700">
+                          <div className="text-sm text-blue-700" style={{ marginTop: '2px' }}>
                             <span className="font-medium">Shift</span> + Enter ↵ to make a line break
                           </div>
                         </div>
