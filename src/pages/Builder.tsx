@@ -412,7 +412,20 @@ const Builder: React.FC = () => {
                           : template.key === 'date'
                             ? 'date'
                             : undefined,
-        answerType: template.key === 'mc' ? 'multiple' : template.key === 'yesno' ? 'yesno' : 'short',
+        answerType:
+          template.key === 'mc'
+            ? 'multiple'
+            : template.key === 'yesno'
+              ? 'yesno'
+              : template.key === 'long'
+                ? 'long'
+                : template.key === 'email'
+                  ? 'email'
+                  : template.key === 'number'
+                    ? 'number'
+                    : template.key === 'date'
+                      ? 'date'
+                      : 'short',
         buttonLabel: template.key === 'welcome' ? 'Start' : template.key === 'end' ? 'Finish' : undefined,
       },
     };
