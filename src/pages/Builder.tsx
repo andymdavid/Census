@@ -1009,7 +1009,15 @@ const Builder: React.FC = () => {
                   </div>
                 ) : selectedQuestion && !isSelectedWelcome && !isSelectedEnd ? (
                   <div className="h-full flex flex-col justify-center px-16 py-12">
-                    <div className="w-full flex justify-start">
+                    <div
+                      className={`w-full flex ${
+                        inferredAnswerType === 'long'
+                          ? 'justify-start'
+                          : selectedSettings.verticalAlignment === 'center'
+                            ? 'justify-center'
+                            : 'justify-start'
+                      }`}
+                    >
                       <div
                         className={`w-full grid grid-cols-[36px_1fr] gap-3 ${
                           inferredAnswerType === 'long' ? 'max-w-none' : 'max-w-[400px]'
