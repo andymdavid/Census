@@ -133,18 +133,10 @@ const questionTypeTemplates = [
     iconClass: 'bg-indigo-100 text-indigo-600',
   },
   {
-    key: 'short',
-    label: 'Short Text',
-    questionText: 'Short answer question',
-    category: 'Short Text',
-    icon: TextCursorInput,
-    iconClass: 'bg-blue-100 text-blue-600',
-  },
-  {
     key: 'long',
-    label: 'Long Text',
-    questionText: 'Long answer question',
-    category: 'Long Text',
+    label: 'Text',
+    questionText: 'Text question',
+    category: 'Text',
     icon: MessageSquareText,
     iconClass: 'bg-slate-100 text-slate-600',
   },
@@ -302,13 +294,13 @@ const Builder: React.FC = () => {
       ? 'multiple'
       : selectedQuestion?.category === 'Yes/No'
         ? 'yesno'
-        : selectedQuestion?.category === 'Long Text'
+        : selectedQuestion?.category === 'Text'
           ? 'long'
-          : selectedQuestion?.category === 'Short Text'
-            ? 'short'
+        : selectedQuestion?.category === 'Short Text'
+            ? 'long'
             : selectedQuestion?.category === 'Email'
               ? 'email'
-              : selectedQuestion?.category === 'Number'
+            : selectedQuestion?.category === 'Number'
                 ? 'number'
                 : selectedQuestion?.category === 'Date'
                   ? 'date'
@@ -1429,8 +1421,7 @@ const Builder: React.FC = () => {
                           >
                             <option value="multiple">Multiple Choice</option>
                             <option value="yesno">Yes/No</option>
-                            <option value="short">Short Text</option>
-                            <option value="long">Long Text</option>
+                            <option value="long">Text</option>
                             <option value="email">Email</option>
                             <option value="number">Number</option>
                             <option value="date">Date</option>
