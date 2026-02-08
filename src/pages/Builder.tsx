@@ -1015,7 +1015,7 @@ const Builder: React.FC = () => {
                           inferredAnswerType === 'long' ? 'max-w-none' : 'max-w-[400px]'
                         }`}
                       >
-                      <div className="text-sm text-blue-600 font-medium leading-snug flex flex-col items-start gap-1 pt-1">
+                      <div className="text-sm text-blue-600 font-medium leading-snug flex items-center gap-2 pt-2">
                         <span className="whitespace-nowrap">{selectedQuestion.id}</span>
                         <span className="whitespace-nowrap">→</span>
                       </div>
