@@ -655,6 +655,42 @@ const Questions: React.FC<QuestionsProps> = ({
                   Continue
                 </motion.button>
               </motion.div>
+            ) : answerType === 'number' ? (
+              <motion.div variants={itemVariants} className="w-full">
+                <input
+                  type="number"
+                  value={typeof currentAnswer === 'string' ? currentAnswer : ''}
+                  onChange={(event) =>
+                    setAnswers((prev) => ({ ...prev, [currentQuestionId]: event.target.value }))
+                  }
+                  min={
+                    question.settings?.minNumberEnabled ? question.settings.minNumber : undefined
+                  }
+                  max={
+                    question.settings?.maxNumberEnabled ? question.settings.maxNumber : undefined
+                  }
+                  className="w-full bg-transparent text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
+                  placeholder="Type your answer here..."
+                />
+                <motion.button
+                  onClick={() => {
+                    if (!canContinue) return;
+                    void proceedToNext(
+                      { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
+                      hasAnswer(currentAnswer)
+                    );
+                  }}
+                  className={`typeform-option-button mt-6 ${
+                    canContinue ? 'typeform-option-yes' : 'typeform-option-no'
+                  }`}
+                  variants={buttonVariants}
+                  whileHover={canContinue ? 'hover' : undefined}
+                  whileTap={canContinue ? 'tap' : undefined}
+                  disabled={!canContinue}
+                >
+                  Continue
+                </motion.button>
+              </motion.div>
             ) : (
               <motion.div 
                 variants={itemVariants}

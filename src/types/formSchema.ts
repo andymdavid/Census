@@ -37,6 +37,10 @@ export interface FormQuestionSettings {
   maxCharacters?: number;
   dateFormat?: 'MMDDYYYY' | 'DDMMYYYY' | 'YYYYMMDD';
   dateSeparator?: '/' | '-' | '.';
+  minNumberEnabled?: boolean;
+  minNumber?: number;
+  maxNumberEnabled?: boolean;
+  maxNumber?: number;
 }
 
 export interface FormResultThreshold {

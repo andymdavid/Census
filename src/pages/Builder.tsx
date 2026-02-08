@@ -1220,6 +1220,16 @@ const Builder: React.FC = () => {
                             placeholder="name@example.com"
                           />
                         </div>
+                      ) : inferredAnswerType === 'number' ? (
+                        <div className="w-full">
+                          <input
+                            type="text"
+                            value=""
+                            readOnly
+                            className="w-full bg-transparent text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
+                            placeholder="Type your answer here..."
+                          />
+                        </div>
                       ) : (
                         <div className="min-w-[280px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
                           Answer
@@ -1537,6 +1547,70 @@ const Builder: React.FC = () => {
                                 </select>
                               </div>
                             </div>
+                          </div>
+                        )}
+
+                        {inferredAnswerType === 'number' && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm text-gray-600">Min number</div>
+                              <Switch.Root
+                                className="of-switch"
+                                checked={Boolean(selectedSettings.minNumberEnabled)}
+                                onCheckedChange={(checked) =>
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    minNumberEnabled: checked,
+                                  }))
+                                }
+                              >
+                                <Switch.Thumb className="of-switch-thumb" />
+                              </Switch.Root>
+                            </div>
+                            {selectedSettings.minNumberEnabled && (
+                              <input
+                                type="number"
+                                value={selectedSettings.minNumber ?? 0}
+                                onChange={(event) =>
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    minNumber: Number(event.target.value),
+                                  }))
+                                }
+                                className="of-input"
+                                placeholder="0"
+                              />
+                            )}
+
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm text-gray-600">Max number</div>
+                              <Switch.Root
+                                className="of-switch"
+                                checked={Boolean(selectedSettings.maxNumberEnabled)}
+                                onCheckedChange={(checked) =>
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    maxNumberEnabled: checked,
+                                  }))
+                                }
+                              >
+                                <Switch.Thumb className="of-switch-thumb" />
+                              </Switch.Root>
+                            </div>
+                            {selectedSettings.maxNumberEnabled && (
+                              <input
+                                type="number"
+                                value={selectedSettings.maxNumber ?? 0}
+                                onChange={(event) =>
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    maxNumber: Number(event.target.value),
+                                  }))
+                                }
+                                className="of-input"
+                                placeholder="0"
+                              />
+                            )}
                           </div>
                         )}
 
