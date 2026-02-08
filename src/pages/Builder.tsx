@@ -991,7 +991,11 @@ const Builder: React.FC = () => {
                           : 'justify-start'
                       }`}
                     >
-                      <div className="w-fit max-w-[400px] flex flex-col items-start text-left">
+                      <div
+                        className={`w-fit flex flex-col items-start text-left ${
+                          selectedSettings.answerType === 'long' ? 'max-w-[720px]' : 'max-w-[400px]'
+                        }`}
+                      >
                       <div className="text-sm text-blue-600 font-medium mb-2 flex items-center gap-2 flex-nowrap">
                         <span className="whitespace-nowrap min-w-[28px]">{selectedQuestion.id}</span>
                         <span className="whitespace-nowrap">→</span>
@@ -1107,7 +1111,7 @@ const Builder: React.FC = () => {
                             rows={3}
                             value=""
                             readOnly
-                            className="w-full bg-transparent text-4xl text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none"
+                            className="w-full bg-transparent text-4xl text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none pointer-events-none"
                             placeholder="Type your answer here..."
                           />
                           <div className="mt-3 text-sm text-blue-700">
