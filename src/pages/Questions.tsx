@@ -580,38 +580,32 @@ const Questions: React.FC<QuestionsProps> = ({
               </motion.div>
             ) : answerType === 'date' ? (
               <motion.div variants={itemVariants} className="w-full">
-                <div className="flex items-end gap-6 text-blue-700 text-sm">
-                  <div className="flex flex-col gap-2">
-                    <span>Month</span>
-                    <input
-                      type="text"
-                      placeholder="MM"
-                      className="w-[110px] text-[36px] text-blue-200 bg-transparent border-b border-blue-400 focus:outline-none"
-                    />
-                  </div>
-                  <div className="text-[36px] text-blue-700 pb-2">
-                    {question.settings?.dateSeparator ?? '/'}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <span>Day</span>
-                    <input
-                      type="text"
-                      placeholder="DD"
-                      className="w-[110px] text-[36px] text-blue-200 bg-transparent border-b border-blue-400 focus:outline-none"
-                    />
-                  </div>
-                  <div className="text-[36px] text-blue-700 pb-2">
-                    {question.settings?.dateSeparator ?? '/'}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <span>Year</span>
-                    <input
-                      type="text"
-                      placeholder="YYYY"
-                      className="w-[160px] text-[36px] text-blue-200 bg-transparent border-b border-blue-400 focus:outline-none"
-                    />
-                  </div>
-                </div>
+                {(() => {
+                  const format = question.settings?.dateFormat ?? 'MMDDYYYY';
+                  const separator = question.settings?.dateSeparator ?? '/';
+                  const parts = format === 'DDMMYYYY' ? ['DD', 'MM', 'YYYY'] : format === 'YYYYMMDD' ? ['YYYY', 'MM', 'DD'] : ['MM', 'DD', 'YYYY'];
+                  const labels: Record<string, string> = { MM: 'Month', DD: 'Day', YYYY: 'Year' };
+                  const widths: Record<string, string> = { MM: 'w-[110px]', DD: 'w-[110px]', YYYY: 'w-[160px]' };
+                  return (
+                    <div className="flex items-end gap-6 text-blue-700 text-sm">
+                      {parts.map((part, index) => (
+                        <React.Fragment key={part}>
+                          <div className="flex flex-col gap-2">
+                            <span>{labels[part]}</span>
+                            <input
+                              type="text"
+                              placeholder={part}
+                              className={`${widths[part]} text-[36px] text-blue-200 bg-transparent border-b border-blue-400 focus:outline-none`}
+                            />
+                          </div>
+                          {index < parts.length - 1 && (
+                            <div className="text-[36px] text-blue-700 pb-2">{separator}</div>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <motion.button
                   onClick={() => {
                     if (!canContinue) return;
@@ -629,7 +623,7 @@ const Questions: React.FC<QuestionsProps> = ({
                   disabled={!canContinue}
                 >
                   Continue
-                </motion.button>
+                  </motion.button>
               </motion.div>
             ) : (
               <motion.div 

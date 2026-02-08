@@ -1160,26 +1160,27 @@ const Builder: React.FC = () => {
                         </div>
                       ) : inferredAnswerType === 'date' ? (
                         <div className="w-full">
-                          <div className="flex items-end gap-6 text-blue-700 text-sm">
-                            <div className="flex flex-col gap-2">
-                              <span>Month</span>
-                              <div className="text-[36px] text-blue-200 border-b border-blue-400 pb-2">MM</div>
-                            </div>
-                            <div className="text-[36px] text-blue-700 pb-2">
-                              {selectedSettings.dateSeparator ?? '/'}
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <span>Day</span>
-                              <div className="text-[36px] text-blue-200 border-b border-blue-400 pb-2">DD</div>
-                            </div>
-                            <div className="text-[36px] text-blue-700 pb-2">
-                              {selectedSettings.dateSeparator ?? '/'}
-                            </div>
-                            <div className="flex flex-col gap-2">
-                              <span>Year</span>
-                              <div className="text-[36px] text-blue-200 border-b border-blue-400 pb-2">YYYY</div>
-                            </div>
-                          </div>
+                          {(() => {
+                            const format = selectedSettings.dateFormat ?? 'MMDDYYYY';
+                            const separator = selectedSettings.dateSeparator ?? '/';
+                            const parts = format === 'DDMMYYYY' ? ['DD', 'MM', 'YYYY'] : format === 'YYYYMMDD' ? ['YYYY', 'MM', 'DD'] : ['MM', 'DD', 'YYYY'];
+                            const labels: Record<string, string> = { MM: 'Month', DD: 'Day', YYYY: 'Year' };
+                            return (
+                              <div className="flex items-end gap-6 text-blue-700 text-sm">
+                                {parts.map((part, index) => (
+                                  <React.Fragment key={part}>
+                                    <div className="flex flex-col gap-2">
+                                      <span>{labels[part]}</span>
+                                      <div className="text-[36px] text-blue-200 border-b border-blue-400 pb-2">{part}</div>
+                                    </div>
+                                    {index < parts.length - 1 && (
+                                      <div className="text-[36px] text-blue-700 pb-2">{separator}</div>
+                                    )}
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                       ) : (
                         <div className="min-w-[280px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
