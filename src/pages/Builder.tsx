@@ -1011,36 +1011,37 @@ const Builder: React.FC = () => {
                   <div className="h-full flex flex-col justify-center px-16 py-12">
                     <div className="w-full flex justify-start">
                       <div
-                        className={`w-full flex flex-col items-start text-left ${
+                        className={`w-full grid grid-cols-[36px_1fr] gap-3 ${
                           inferredAnswerType === 'long' ? 'max-w-none' : 'max-w-[400px]'
                         }`}
                       >
-                      <div className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2 w-full">
-                        <div className="flex items-start gap-2 flex-shrink-0">
-                          <span className="whitespace-nowrap min-w-[28px] pt-2">{selectedQuestion.id}</span>
-                          <span className="whitespace-nowrap pt-2">→</span>
-                        </div>
-                        <textarea
-                          ref={questionTitleRef}
-                          rows={1}
-                          value={selectedQuestion.text}
-                          onChange={(event) => {
-                            updateQuestion(selectedQuestion.id, (question) => ({
-                              ...question,
-                              text: event.target.value,
-                            }));
-                            if (questionTitleRef.current) {
-                              questionTitleRef.current.style.height = 'auto';
-                              questionTitleRef.current.style.height = `${questionTitleRef.current.scrollHeight}px`;
-                            }
-                          }}
-                          className="text-gray-800 text-[20px] font-semibold bg-transparent focus:outline-none w-full min-w-0 resize-none leading-snug"
-                          placeholder="Your question here. Recall information with @"
-                        />
-                        {selectedSettings.required && (
-                          <span className="text-red-500 font-semibold pt-2 flex-shrink-0">*</span>
-                        )}
+                      <div className="text-sm text-blue-600 font-medium leading-snug flex flex-col items-start gap-1 pt-1">
+                        <span className="whitespace-nowrap">{selectedQuestion.id}</span>
+                        <span className="whitespace-nowrap">→</span>
                       </div>
+                      <div className="flex flex-col items-start text-left">
+                        <div className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2 w-full">
+                          <textarea
+                            ref={questionTitleRef}
+                            rows={1}
+                            value={selectedQuestion.text}
+                            onChange={(event) => {
+                              updateQuestion(selectedQuestion.id, (question) => ({
+                                ...question,
+                                text: event.target.value,
+                              }));
+                              if (questionTitleRef.current) {
+                                questionTitleRef.current.style.height = 'auto';
+                                questionTitleRef.current.style.height = `${questionTitleRef.current.scrollHeight}px`;
+                              }
+                            }}
+                            className="text-gray-800 text-[20px] font-semibold bg-transparent focus:outline-none w-full min-w-0 resize-none leading-snug"
+                            placeholder="Your question here. Recall information with @"
+                          />
+                          {selectedSettings.required && (
+                            <span className="text-red-500 font-semibold pt-1 flex-shrink-0">*</span>
+                          )}
+                        </div>
                       <textarea
                         rows={1}
                         value={selectedSettings.description ?? ''}
@@ -1155,6 +1156,7 @@ const Builder: React.FC = () => {
                       )}
                       </div>
                     </div>
+                  </div>
                   </div>
                 ) : schema.description?.trim() && previewStep === 'intro' ? (
                   <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12">

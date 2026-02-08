@@ -445,159 +445,166 @@ const Questions: React.FC<QuestionsProps> = ({
           >
             <div className={`w-full flex ${blockJustifyClass}`}>
               <div
-                className={`w-full flex flex-col items-start text-left ${
+                className={`w-full grid grid-cols-[36px_1fr] gap-3 ${
                   answerType === 'long' ? 'max-w-none' : 'max-w-[400px]'
                 }`}
               >
-              {/* Category label - small and above question */}
-              <motion.div 
-                variants={itemVariants}
-                className="typeform-category"
-              >
-                {question.category}
-              </motion.div>
+                <div className="text-sm text-blue-600 font-medium leading-snug flex flex-col items-start gap-1 pt-1">
+                  <span className="whitespace-nowrap">{question.id}</span>
+                  <span className="whitespace-nowrap">→</span>
+                </div>
+                <div className="flex flex-col items-start text-left">
+                  {/* Category label - small and above question */}
+                  <motion.div 
+                    variants={itemVariants}
+                    className="typeform-category"
+                  >
+                    {question.category}
+                  </motion.div>
 
-              {/* Question - larger and more prominent */}
-              <motion.h2 
-                variants={itemVariants}
-                className="typeform-question text-left mx-0"
-              >
-                {question.text}
-                {isRequired && <span className="text-red-500 ml-1">*</span>}
-              </motion.h2>
+                  {/* Question - larger and more prominent */}
+                  <motion.h2 
+                    variants={itemVariants}
+                    className="typeform-question text-left mx-0"
+                  >
+                    {question.text}
+                    {isRequired && <span className="text-red-500 ml-1">*</span>}
+                  </motion.h2>
 
-              {question.settings?.description && (
-                <motion.p variants={itemVariants} className="typeform-text text-left mx-0">
-                  {question.settings.description}
-                </motion.p>
-              )}
-
-              {question.settings?.mediaUrl && (
-                <motion.div variants={itemVariants} className="mb-6">
-                  {question.settings.mediaType === 'video' ? (
-                    <video
-                      src={question.settings.mediaUrl}
-                      className="max-w-[520px] rounded-xl shadow-sm"
-                      controls
-                    />
-                  ) : (
-                    <img
-                      src={question.settings.mediaUrl}
-                      alt="Question media"
-                      className="max-w-[520px] rounded-xl shadow-sm"
-                    />
+                  {question.settings?.description && (
+                    <motion.p variants={itemVariants} className="typeform-text text-left mx-0">
+                      {question.settings.description}
+                    </motion.p>
                   )}
-                </motion.div>
-              )}
 
-              {/* Answer buttons - better spacing */}
-            {answerType === 'multiple' ? (
-              <motion.div
-                variants={itemVariants}
-                className="flex flex-col gap-3 w-full max-w-xl items-start"
-              >
-                  {choiceList.map((choice) => {
-                    const selected = Array.isArray(currentAnswer)
-                      ? currentAnswer.includes(choice)
-                      : currentAnswer === choice;
-                    return (
+                  {question.settings?.mediaUrl && (
+                    <motion.div variants={itemVariants} className="mb-6">
+                      {question.settings.mediaType === 'video' ? (
+                        <video
+                          src={question.settings.mediaUrl}
+                          className="max-w-[520px] rounded-xl shadow-sm"
+                          controls
+                        />
+                      ) : (
+                        <img
+                          src={question.settings.mediaUrl}
+                          alt="Question media"
+                          className="max-w-[520px] rounded-xl shadow-sm"
+                        />
+                      )}
+                    </motion.div>
+                  )}
+
+                  {/* Answer buttons - better spacing */}
+                  {answerType === 'multiple' ? (
+                    <motion.div
+                      variants={itemVariants}
+                      className="flex flex-col gap-3 w-full max-w-xl items-start"
+                    >
+                      {choiceList.map((choice) => {
+                        const selected = Array.isArray(currentAnswer)
+                          ? currentAnswer.includes(choice)
+                          : currentAnswer === choice;
+                        return (
+                          <motion.button
+                            key={choice}
+                            onClick={() => handleMultipleSelect(choice)}
+                            className={`typeform-option-button ${
+                              selected ? 'typeform-option-yes' : 'typeform-option-no'
+                            }`}
+                            variants={buttonVariants}
+                            whileHover="hover"
+                            whileTap="tap"
+                          >
+                            {choice}
+                          </motion.button>
+                        );
+                      })}
+                      {question.settings?.multipleSelection && (
+                        <motion.button
+                          onClick={() => {
+                            if (!canContinue) return;
+                            void proceedToNext(
+                              { ...answers, [currentQuestionId]: currentAnswer ?? [] },
+                              hasAnswer(currentAnswer)
+                            );
+                          }}
+                          className={`typeform-option-button ${
+                            canContinue ? 'typeform-option-yes' : 'typeform-option-no'
+                          }`}
+                          variants={buttonVariants}
+                          whileHover={canContinue ? 'hover' : undefined}
+                          whileTap={canContinue ? 'tap' : undefined}
+                          disabled={!canContinue}
+                        >
+                          Continue
+                        </motion.button>
+                      )}
+                    </motion.div>
+                  ) : answerType === 'long' ? (
+                    <motion.div variants={itemVariants} className="w-full">
+                      <textarea
+                        rows={3}
+                        value={typeof currentAnswer === 'string' ? currentAnswer : ''}
+                        onChange={(event) =>
+                          setAnswers((prev) => ({ ...prev, [currentQuestionId]: event.target.value }))
+                        }
+                        maxLength={
+                          question.settings?.maxCharactersEnabled ? question.settings.maxCharacters ?? undefined : undefined
+                        }
+                        className="w-full bg-transparent text-4xl text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none"
+                        placeholder="Type your answer here..."
+                      />
+                      <div className="mt-3 text-sm text-blue-700">
+                        <span className="font-medium">Shift</span> + Enter ↵ to make a line break
+                      </div>
                       <motion.button
-                        key={choice}
-                        onClick={() => handleMultipleSelect(choice)}
-                        className={`typeform-option-button ${
-                          selected ? 'typeform-option-yes' : 'typeform-option-no'
+                        onClick={() => {
+                          if (!canContinue) return;
+                          void proceedToNext(
+                            { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
+                            hasAnswer(currentAnswer)
+                          );
+                        }}
+                        className={`typeform-option-button mt-6 ${
+                          canContinue ? 'typeform-option-yes' : 'typeform-option-no'
                         }`}
+                        variants={buttonVariants}
+                        whileHover={canContinue ? 'hover' : undefined}
+                        whileTap={canContinue ? 'tap' : undefined}
+                        disabled={!canContinue}
+                      >
+                        Continue
+                      </motion.button>
+                    </motion.div>
+                  ) : (
+                    <motion.div 
+                      variants={itemVariants}
+                      className="typeform-options"
+                    >
+                      <motion.button
+                        onClick={() => handleAnswer(true)}
+                        className="typeform-option-button typeform-option-yes"
                         variants={buttonVariants}
                         whileHover="hover"
                         whileTap="tap"
                       >
-                        {choice}
+                        Yes
                       </motion.button>
-                    );
-                  })}
-                  {question.settings?.multipleSelection && (
-                    <motion.button
-                      onClick={() => {
-                        if (!canContinue) return;
-                        void proceedToNext(
-                          { ...answers, [currentQuestionId]: currentAnswer ?? [] },
-                          hasAnswer(currentAnswer)
-                        );
-                      }}
-                      className={`typeform-option-button ${
-                        canContinue ? 'typeform-option-yes' : 'typeform-option-no'
-                      }`}
-                      variants={buttonVariants}
-                      whileHover={canContinue ? 'hover' : undefined}
-                      whileTap={canContinue ? 'tap' : undefined}
-                      disabled={!canContinue}
-                    >
-                      Continue
-                    </motion.button>
+                      <motion.button
+                        onClick={() => handleAnswer(false)}
+                        className="typeform-option-button typeform-option-no"
+                        variants={buttonVariants}
+                        whileHover="hover"
+                        whileTap="tap"
+                      >
+                        No
+                      </motion.button>
+                    </motion.div>
                   )}
-                </motion.div>
-            ) : answerType === 'long' ? (
-              <motion.div variants={itemVariants} className="w-full">
-                <textarea
-                  rows={3}
-                  value={typeof currentAnswer === 'string' ? currentAnswer : ''}
-                  onChange={(event) =>
-                    setAnswers((prev) => ({ ...prev, [currentQuestionId]: event.target.value }))
-                  }
-                  maxLength={
-                    question.settings?.maxCharactersEnabled ? question.settings.maxCharacters ?? undefined : undefined
-                  }
-                  className="w-full bg-transparent text-4xl text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none"
-                  placeholder="Type your answer here..."
-                />
-                <div className="mt-3 text-sm text-blue-700">
-                  <span className="font-medium">Shift</span> + Enter ↵ to make a line break
                 </div>
-                <motion.button
-                  onClick={() => {
-                    if (!canContinue) return;
-                    void proceedToNext(
-                      { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
-                      hasAnswer(currentAnswer)
-                    );
-                  }}
-                  className={`typeform-option-button mt-6 ${
-                    canContinue ? 'typeform-option-yes' : 'typeform-option-no'
-                  }`}
-                  variants={buttonVariants}
-                  whileHover={canContinue ? 'hover' : undefined}
-                  whileTap={canContinue ? 'tap' : undefined}
-                  disabled={!canContinue}
-                >
-                  Continue
-                </motion.button>
-              </motion.div>
-            ) : (
-              <motion.div 
-                variants={itemVariants}
-                className="typeform-options"
-              >
-                  <motion.button
-                    onClick={() => handleAnswer(true)}
-                    className="typeform-option-button typeform-option-yes"
-                    variants={buttonVariants}
-                    whileHover="hover"
-                    whileTap="tap"
-                  >
-                    Yes
-                  </motion.button>
-                  <motion.button
-                    onClick={() => handleAnswer(false)}
-                    className="typeform-option-button typeform-option-no"
-                    variants={buttonVariants}
-                    whileHover="hover"
-                    whileTap="tap"
-                  >
-                    No
-                  </motion.button>
-                </motion.div>
-              )}
               </div>
+            </div>
             </div>
 
             {/* Back button - only show if not on first question */}
