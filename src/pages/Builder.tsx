@@ -285,6 +285,7 @@ const Builder: React.FC = () => {
     { label: '"Other" option', key: 'otherOption' },
   ];
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
+  const questionTitleRef = useRef<HTMLTextAreaElement | null>(null);
 
   const selectedQuestion = schema.questions.find((question) => question.id === selectedQuestionId);
   const questionOptions = schema.questions.map((question) => question.id);
@@ -467,6 +468,13 @@ const Builder: React.FC = () => {
       setPreviewStep('questions');
     }
   }, [schema.description]);
+
+  useEffect(() => {
+    if (questionTitleRef.current) {
+      questionTitleRef.current.style.height = 'auto';
+      questionTitleRef.current.style.height = `${questionTitleRef.current.scrollHeight}px`;
+    }
+  }, [selectedQuestion?.text, selectedQuestionId]);
 
   const updateQuestion = (
     questionId: number,
@@ -1013,23 +1021,28 @@ const Builder: React.FC = () => {
                           inferredAnswerType === 'long' ? 'max-w-[720px]' : 'max-w-[400px]'
                         }`}
                       >
-                      <div className="text-sm text-blue-600 font-medium mb-2 flex items-center gap-2 flex-nowrap">
-                        <span className="whitespace-nowrap min-w-[28px]">{selectedQuestion.id}</span>
-                        <span className="whitespace-nowrap">→</span>
-                        <input
-                          type="text"
+                      <div className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2">
+                        <span className="whitespace-nowrap min-w-[28px] pt-2">{selectedQuestion.id}</span>
+                        <span className="whitespace-nowrap pt-2">→</span>
+                        <textarea
+                          ref={questionTitleRef}
+                          rows={1}
                           value={selectedQuestion.text}
-                          onChange={(event) =>
+                          onChange={(event) => {
                             updateQuestion(selectedQuestion.id, (question) => ({
                               ...question,
                               text: event.target.value,
-                            }))
-                          }
-                        className="text-gray-600 italic bg-transparent focus:outline-none w-full min-w-0"
-                        placeholder="Your question here. Recall information with @"
-                      />
+                            }));
+                            if (questionTitleRef.current) {
+                              questionTitleRef.current.style.height = 'auto';
+                              questionTitleRef.current.style.height = `${questionTitleRef.current.scrollHeight}px`;
+                            }
+                          }}
+                          className="text-gray-800 text-3xl font-semibold bg-transparent focus:outline-none w-full min-w-0 resize-none leading-snug"
+                          placeholder="Your question here. Recall information with @"
+                        />
                         {selectedSettings.required && (
-                          <span className="text-red-500 font-semibold">*</span>
+                          <span className="text-red-500 font-semibold pt-2">*</span>
                         )}
                       </div>
                       <input
@@ -1041,7 +1054,7 @@ const Builder: React.FC = () => {
                             description: event.target.value,
                           }))
                         }
-                        className="text-sm text-gray-400 italic bg-transparent focus:outline-none w-[420px] mb-6"
+                        className="text-sm text-gray-400 italic bg-transparent focus:outline-none w-full mb-6"
                         placeholder="Description (optional)"
                       />
 
