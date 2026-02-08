@@ -789,7 +789,7 @@ const Builder: React.FC = () => {
               Branching
             </Tabs.Trigger>
             <Tabs.Trigger className="of-tabs-trigger" value="theme">
-              Theme
+              Design
             </Tabs.Trigger>
             <Tabs.Trigger className="of-tabs-trigger" value="results">
               Results
@@ -1834,7 +1834,7 @@ const Builder: React.FC = () => {
 
             <Tabs.Content value="theme">
               <div className="space-y-3">
-                <div className="text-sm font-medium text-gray-600">Theme</div>
+                <div className="text-sm font-medium text-gray-600">Design</div>
                 <div>
                   <label className="of-label">Primary color</label>
                   <input
