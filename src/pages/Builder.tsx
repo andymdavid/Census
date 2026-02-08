@@ -1088,6 +1088,19 @@ const Builder: React.FC = () => {
                             </div>
                           ))}
                         </div>
+                      ) : selectedSettings.answerType === 'long' ? (
+                        <div className="w-full">
+                          <textarea
+                            rows={3}
+                            value=""
+                            readOnly
+                            className="w-full bg-transparent text-4xl text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none"
+                            placeholder="Type your answer here..."
+                          />
+                          <div className="mt-3 text-sm text-blue-700">
+                            <span className="font-medium">Shift</span> + Enter ↵ to make a line break
+                          </div>
+                        </div>
                       ) : (
                         <div className="min-w-[280px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
                           Answer
@@ -1303,6 +1316,9 @@ const Builder: React.FC = () => {
                               if (selectedSettings.answerType === 'multiple') {
                                 return key === 'required' || key === 'multipleSelection' || key === 'otherOption';
                               }
+                              if (selectedSettings.answerType === 'long') {
+                                return key === 'required';
+                              }
                               return key === 'required';
                             })
                             .map(({ label, key }) => (
@@ -1321,8 +1337,43 @@ const Builder: React.FC = () => {
                                   <Switch.Thumb className="of-switch-thumb" />
                                 </Switch.Root>
                               </div>
-                            ))}
+                          ))}
                         </div>
+
+                        {selectedSettings.answerType === 'long' && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm text-gray-600">Max characters</div>
+                              <Switch.Root
+                                className="of-switch"
+                                checked={Boolean(selectedSettings.maxCharactersEnabled)}
+                                onCheckedChange={(checked) =>
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    maxCharactersEnabled: checked,
+                                  }))
+                                }
+                              >
+                                <Switch.Thumb className="of-switch-thumb" />
+                              </Switch.Root>
+                            </div>
+                            {selectedSettings.maxCharactersEnabled && (
+                              <input
+                                type="number"
+                                min={0}
+                                value={selectedSettings.maxCharacters ?? 0}
+                                onChange={(event) =>
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    maxCharacters: Number(event.target.value),
+                                  }))
+                                }
+                                className="of-input"
+                                placeholder="0-9999999999"
+                              />
+                            )}
+                          </div>
+                        )}
 
                         <div>
                           <label className="of-label">Vertical alignment</label>

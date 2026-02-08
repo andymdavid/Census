@@ -471,11 +471,11 @@ const Questions: React.FC<QuestionsProps> = ({
               )}
 
               {/* Answer buttons - better spacing */}
-              {answerType === 'multiple' ? (
-                <motion.div
-                  variants={itemVariants}
-                  className="flex flex-col gap-3 w-full max-w-xl items-start"
-                >
+            {answerType === 'multiple' ? (
+              <motion.div
+                variants={itemVariants}
+                className="flex flex-col gap-3 w-full max-w-xl items-start"
+              >
                   {choiceList.map((choice) => {
                     const selected = Array.isArray(currentAnswer)
                       ? currentAnswer.includes(choice)
@@ -516,11 +516,47 @@ const Questions: React.FC<QuestionsProps> = ({
                     </motion.button>
                   )}
                 </motion.div>
-              ) : (
-                <motion.div 
-                  variants={itemVariants}
-                  className="typeform-options"
+            ) : answerType === 'long' ? (
+              <motion.div variants={itemVariants} className="w-full max-w-xl">
+                <textarea
+                  rows={3}
+                  value={typeof currentAnswer === 'string' ? currentAnswer : ''}
+                  onChange={(event) =>
+                    setAnswers((prev) => ({ ...prev, [currentQuestionId]: event.target.value }))
+                  }
+                  maxLength={
+                    question.settings?.maxCharactersEnabled ? question.settings.maxCharacters ?? undefined : undefined
+                  }
+                  className="w-full bg-transparent text-4xl text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none"
+                  placeholder="Type your answer here..."
+                />
+                <div className="mt-3 text-sm text-blue-700">
+                  <span className="font-medium">Shift</span> + Enter ↵ to make a line break
+                </div>
+                <motion.button
+                  onClick={() => {
+                    if (!canContinue) return;
+                    void proceedToNext(
+                      { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
+                      hasAnswer(currentAnswer)
+                    );
+                  }}
+                  className={`typeform-option-button mt-6 ${
+                    canContinue ? 'typeform-option-yes' : 'typeform-option-no'
+                  }`}
+                  variants={buttonVariants}
+                  whileHover={canContinue ? 'hover' : undefined}
+                  whileTap={canContinue ? 'tap' : undefined}
+                  disabled={!canContinue}
                 >
+                  Continue
+                </motion.button>
+              </motion.div>
+            ) : (
+              <motion.div 
+                variants={itemVariants}
+                className="typeform-options"
+              >
                   <motion.button
                     onClick={() => handleAnswer(true)}
                     className="typeform-option-button typeform-option-yes"

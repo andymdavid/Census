@@ -33,6 +33,8 @@ export interface FormQuestionSettings {
   showSubmissionCount?: boolean;
   buttonLabel?: string;
   mediaUrl?: string;
+  maxCharactersEnabled?: boolean;
+  maxCharacters?: number;
 }
 
 export interface FormResultThreshold {
