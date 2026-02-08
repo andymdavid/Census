@@ -1015,11 +1015,11 @@ const Builder: React.FC = () => {
                           inferredAnswerType === 'long' ? 'max-w-none' : 'max-w-[400px]'
                         }`}
                       >
-                      <div className="text-sm text-blue-600 font-medium leading-snug flex items-center gap-2 pt-2">
-                        <span className="whitespace-nowrap">{selectedQuestion.id}</span>
-                        <span className="whitespace-nowrap">→</span>
-                      </div>
-                      <div className="flex flex-col items-start text-left">
+                        <div className="text-sm text-blue-600 font-medium leading-snug flex items-center gap-2 self-start mt-[6px]">
+                          <span className="whitespace-nowrap">{selectedQuestion.id}</span>
+                          <span className="whitespace-nowrap">→</span>
+                        </div>
+                        <div className="flex flex-col items-start text-left">
                         <div className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2 w-full">
                           <textarea
                             ref={questionTitleRef}

@@ -449,7 +449,7 @@ const Questions: React.FC<QuestionsProps> = ({
                   answerType === 'long' ? 'max-w-none' : 'max-w-[400px]'
                 }`}
               >
-                <div className="text-sm text-blue-600 font-medium leading-snug flex items-center gap-2 pt-2">
+                <div className="text-sm text-blue-600 font-medium leading-snug flex items-center gap-2 self-start mt-[6px]">
                   <span className="whitespace-nowrap">{question.id}</span>
                   <span className="whitespace-nowrap">→</span>
                 </div>
