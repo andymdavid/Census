@@ -180,6 +180,14 @@ const questionTypeTemplates = [
     icon: Palette,
     iconClass: 'bg-purple-100 text-purple-600',
   },
+  {
+    key: 'group',
+    label: 'Question Group',
+    questionText: 'Section title',
+    category: 'Question Group',
+    icon: FormInput,
+    iconClass: 'bg-sky-100 text-sky-600',
+  },
 ];
 
 const validateSchema = (schema: FormSchemaV0) => {
@@ -287,6 +295,7 @@ const Builder: React.FC = () => {
   const resultOptions = schema.results;
   const isSelectedWelcome = selectedQuestion?.category === 'Welcome Screen';
   const isSelectedEnd = selectedQuestion?.category === 'End Screen';
+  const isSelectedGroup = selectedQuestion?.category === 'Question Group';
   const selectedSettings = selectedQuestion?.settings ?? {};
   const inferredAnswerType =
     selectedSettings.answerType ??
@@ -410,8 +419,10 @@ const Builder: React.FC = () => {
             ? 'welcome'
             : template.key === 'end'
               ? 'end'
-              : template.key === 'yesno'
-                ? 'yesno'
+              : template.key === 'group'
+                ? 'group'
+                : template.key === 'yesno'
+                  ? 'yesno'
                 : template.key === 'mc'
                   ? 'multiple'
                   : template.key === 'short'
@@ -1035,8 +1046,8 @@ const Builder: React.FC = () => {
                         <div className="text-sm text-blue-600 font-medium leading-snug flex items-center gap-2 self-start mt-[6px]">
                           <span className="whitespace-nowrap">{selectedQuestion.id}</span>
                           <span className="whitespace-nowrap">→</span>
-                        </div>
-                        <div className="flex flex-col items-start text-left">
+                      </div>
+                      <div className="flex flex-col items-start text-left">
                         <div
                           ref={questionTitleContainerRef}
                           className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2 w-full relative"
@@ -1105,7 +1116,17 @@ const Builder: React.FC = () => {
                         </div>
                       )}
 
-                      {inferredAnswerType === 'multiple' ? (
+                      {isSelectedGroup ? (
+                        <div className="mt-6 flex items-center gap-3">
+                          <button
+                            type="button"
+                            className="px-6 py-3 rounded-md bg-[#1f3bb3] text-white text-xl font-semibold"
+                          >
+                            {selectedSettings.buttonLabel ?? 'Continue'}
+                          </button>
+                          <span className="text-sm text-gray-600">press Enter ↵</span>
+                        </div>
+                      ) : inferredAnswerType === 'multiple' ? (
                         <div className="flex flex-col gap-3 w-full items-start">
                           {[
                             ...(selectedSettings.choices ?? ['Choice A']),
@@ -1402,6 +1423,34 @@ const Builder: React.FC = () => {
                           +
                         </button>
                       </div>
+                      </div>
+                    ) : isSelectedGroup ? (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="of-label">Button</label>
+                          <input
+                            type="text"
+                            value={selectedSettings.buttonLabel ?? 'Continue'}
+                            onChange={(event) =>
+                              updateSelectedQuestionSettings((settings) => ({
+                                ...settings,
+                                buttonLabel: event.target.value,
+                              }))
+                            }
+                            className="of-input"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                          <div className="text-sm text-gray-600">Image or video</div>
+                          <button
+                            type="button"
+                            className="h-8 w-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                            onClick={() => mediaInputRef.current?.click()}
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <div className="space-y-4">

@@ -20,7 +20,7 @@ export interface FormQuestion {
 }
 
 export interface FormQuestionSettings {
-  kind?: 'welcome' | 'end' | 'yesno' | 'multiple' | 'short' | 'long' | 'email' | 'number' | 'date';
+  kind?: 'welcome' | 'end' | 'group' | 'yesno' | 'multiple' | 'short' | 'long' | 'email' | 'number' | 'date';
   answerType?: 'multiple' | 'yesno' | 'short' | 'long' | 'email' | 'number' | 'date';
   choices?: string[];
   description?: string;

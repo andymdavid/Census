@@ -31,8 +31,12 @@ const Questions: React.FC<QuestionsProps> = ({
   const allQuestions = form.questions;
   const welcomeScreen = allQuestions.find((q) => q.category === 'Welcome Screen') ?? null;
   const endScreen = allQuestions.find((q) => q.category === 'End Screen') ?? null;
+  const groupScreens = allQuestions.filter((q) => q.category === 'Question Group');
   const questions = allQuestions.filter(
-    (q) => q.category !== 'Welcome Screen' && q.category !== 'End Screen'
+    (q) =>
+      q.category !== 'Welcome Screen' &&
+      q.category !== 'End Screen' &&
+      q.category !== 'Question Group'
   );
   const totalScore = form.totalScore;
   const logoUrl = form.theme?.logoUrl;
@@ -45,8 +49,8 @@ const Questions: React.FC<QuestionsProps> = ({
       } as React.CSSProperties)
     : undefined;
   const questionMap = useMemo(
-    () => new Map(questions.map((question) => [question.id, question])),
-    [questions]
+    () => new Map(allQuestions.map((question) => [question.id, question])),
+    [allQuestions]
   );
 
   // State to track current question index
@@ -76,9 +80,9 @@ const Questions: React.FC<QuestionsProps> = ({
   };
 
   const getSequentialNextId = (questionId: number) => {
-    const index = questions.findIndex((question) => question.id === questionId);
+    const index = allQuestions.findIndex((question) => question.id === questionId);
     if (index === -1) return null;
-    return questions[index + 1]?.id ?? null;
+    return allQuestions[index + 1]?.id ?? null;
   };
 
   const getNextQuestionId = (questionId: number, answer: boolean) => {
@@ -237,6 +241,7 @@ const Questions: React.FC<QuestionsProps> = ({
                 : question?.category === 'Date'
                   ? 'date'
                   : 'yesno');
+  const isGroup = question?.category === 'Question Group';
   const isRequired = Boolean(question?.settings?.required);
   const currentAnswer = answers[currentQuestionId];
   const canContinue = !isRequired || hasAnswer(currentAnswer);
@@ -690,6 +695,21 @@ const Questions: React.FC<QuestionsProps> = ({
                 >
                   Continue
                 </motion.button>
+              </motion.div>
+            ) : isGroup ? (
+              <motion.div variants={itemVariants} className="mt-6 flex items-center gap-3">
+                <motion.button
+                  onClick={() => {
+                    void proceedToNext({ ...answers }, true);
+                  }}
+                  className="typeform-button"
+                  variants={buttonVariants}
+                  whileHover="hover"
+                  whileTap="tap"
+                >
+                  {question.settings?.buttonLabel ?? 'Continue'}
+                </motion.button>
+                <span className="text-sm text-gray-600">press Enter ↵</span>
               </motion.div>
             ) : (
               <motion.div 
