@@ -971,8 +971,12 @@ const Builder: React.FC = () => {
 
             <section className="flex-1 p-6 overflow-y-auto border-r-2 border-white">
               <div
-                className={`h-full ${isSelectedWelcome || isSelectedEnd ? '' : 'border border-gray-200 rounded-xl bg-white overflow-hidden'}`}
-                style={themeStyles}
+                className={`h-full ${isSelectedWelcome || isSelectedEnd ? '' : 'border border-gray-200 rounded-xl overflow-hidden'}`}
+                style={{
+                  ...themeStyles,
+                  backgroundColor: 'var(--color-background)',
+                  color: 'var(--color-text)',
+                }}
               >
                 {schema.questions.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12">
