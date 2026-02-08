@@ -1041,16 +1041,20 @@ const Builder: React.FC = () => {
                           <span className="text-red-500 font-semibold pt-2 flex-shrink-0">*</span>
                         )}
                       </div>
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
                         value={selectedSettings.description ?? ''}
-                        onChange={(event) =>
+                        onChange={(event) => {
                           updateSelectedQuestionSettings((settings) => ({
                             ...settings,
                             description: event.target.value,
-                          }))
-                        }
-                        className="text-sm text-gray-400 italic bg-transparent focus:outline-none w-full mb-6"
+                          }));
+                          if (event.currentTarget) {
+                            event.currentTarget.style.height = 'auto';
+                            event.currentTarget.style.height = `${event.currentTarget.scrollHeight}px`;
+                          }
+                        }}
+                        className="text-sm text-gray-400 italic bg-transparent focus:outline-none w-full mb-6 resize-none leading-snug"
                         placeholder="Description (optional)"
                       />
 
