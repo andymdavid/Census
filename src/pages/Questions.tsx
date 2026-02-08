@@ -445,8 +445,8 @@ const Questions: React.FC<QuestionsProps> = ({
           >
             <div className={`w-full flex ${blockJustifyClass}`}>
               <div
-                className={`w-fit flex flex-col items-start text-left ${
-                  answerType === 'long' ? 'max-w-[720px]' : 'max-w-[400px]'
+                className={`w-full flex flex-col items-start text-left ${
+                  answerType === 'long' ? 'max-w-none' : 'max-w-[400px]'
                 }`}
               >
               {/* Category label - small and above question */}
@@ -537,7 +537,7 @@ const Questions: React.FC<QuestionsProps> = ({
                   )}
                 </motion.div>
             ) : answerType === 'long' ? (
-              <motion.div variants={itemVariants} className="w-full max-w-[720px]">
+              <motion.div variants={itemVariants} className="w-full">
                 <textarea
                   rows={3}
                   value={typeof currentAnswer === 'string' ? currentAnswer : ''}

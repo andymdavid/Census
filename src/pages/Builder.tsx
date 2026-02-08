@@ -1009,16 +1009,10 @@ const Builder: React.FC = () => {
                   </div>
                 ) : selectedQuestion && !isSelectedWelcome && !isSelectedEnd ? (
                   <div className="h-full flex flex-col justify-center px-16 py-12">
-                    <div
-                      className={`w-full flex ${
-                        selectedSettings.verticalAlignment === 'center'
-                          ? 'justify-center'
-                          : 'justify-start'
-                      }`}
-                    >
+                    <div className="w-full flex justify-start">
                       <div
-                        className={`w-fit flex flex-col items-start text-left ${
-                          inferredAnswerType === 'long' ? 'max-w-[720px]' : 'max-w-[400px]'
+                        className={`w-full flex flex-col items-start text-left ${
+                          inferredAnswerType === 'long' ? 'max-w-none' : 'max-w-[400px]'
                         }`}
                       >
                       <div className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2">
@@ -1422,24 +1416,26 @@ const Builder: React.FC = () => {
                           </div>
                         )}
 
-                        <div>
-                          <label className="of-label">Vertical alignment</label>
-                          <select
-                          value={selectedSettings.verticalAlignment ?? 'left'}
-                          onChange={(event) =>
-                            updateSelectedQuestionSettings((settings) => ({
-                              ...settings,
-                              verticalAlignment: event.target.value as NonNullable<
-                                FormQuestionSettings['verticalAlignment']
-                              >,
-                            }))
-                          }
-                          className="of-input"
-                        >
-                          <option value="left">Left</option>
-                          <option value="center">Center</option>
-                        </select>
-                      </div>
+                        {inferredAnswerType !== 'long' && (
+                          <div>
+                            <label className="of-label">Vertical alignment</label>
+                            <select
+                              value={selectedSettings.verticalAlignment ?? 'left'}
+                              onChange={(event) =>
+                                updateSelectedQuestionSettings((settings) => ({
+                                  ...settings,
+                                  verticalAlignment: event.target.value as NonNullable<
+                                    FormQuestionSettings['verticalAlignment']
+                                  >,
+                                }))
+                              }
+                              className="of-input"
+                            >
+                              <option value="left">Left</option>
+                              <option value="center">Center</option>
+                            </select>
+                          </div>
+                        )}
 
                         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                           <div className="text-sm text-gray-600">Image or video</div>
