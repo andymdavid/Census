@@ -1075,6 +1075,19 @@ const Builder: React.FC = () => {
                             </button>
                           </div>
                         </div>
+                      ) : selectedSettings.answerType === 'yesno' ? (
+                        <div className="flex flex-col gap-3 w-full items-start">
+                          {['Yes', 'No'].map((choice) => (
+                            <div key={choice} className="flex items-center gap-3 w-full">
+                              <div className="h-8 w-8 rounded-md border border-blue-300 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                                {choice === 'Yes' ? 'Y' : 'N'}
+                              </div>
+                              <div className="min-w-[260px] rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-gray-700">
+                                {choice}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       ) : (
                         <div className="min-w-[280px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
                           Answer
@@ -1282,23 +1295,33 @@ const Builder: React.FC = () => {
                         </div>
 
                         <div className="space-y-3">
-                          {questionToggleSettings.map(({ label, key }) => (
-                            <div className="flex items-center justify-between" key={key}>
-                              <div className="text-sm text-gray-600">{label}</div>
-                              <Switch.Root
-                                className="of-switch"
-                                checked={Boolean(selectedSettings[key])}
-                                onCheckedChange={(checked) =>
-                                  updateSelectedQuestionSettings((settings) => ({
-                                    ...settings,
-                                    [key]: checked,
-                                  }))
-                                }
-                              >
-                                <Switch.Thumb className="of-switch-thumb" />
-                              </Switch.Root>
-                            </div>
-                          ))}
+                          {questionToggleSettings
+                            .filter(({ key }) => {
+                              if (selectedSettings.answerType === 'yesno') {
+                                return key === 'required';
+                              }
+                              if (selectedSettings.answerType === 'multiple') {
+                                return key === 'required' || key === 'multipleSelection' || key === 'otherOption';
+                              }
+                              return key === 'required';
+                            })
+                            .map(({ label, key }) => (
+                              <div className="flex items-center justify-between" key={key}>
+                                <div className="text-sm text-gray-600">{label}</div>
+                                <Switch.Root
+                                  className="of-switch"
+                                  checked={Boolean(selectedSettings[key])}
+                                  onCheckedChange={(checked) =>
+                                    updateSelectedQuestionSettings((settings) => ({
+                                      ...settings,
+                                      [key]: checked,
+                                    }))
+                                  }
+                                >
+                                  <Switch.Thumb className="of-switch-thumb" />
+                                </Switch.Root>
+                              </div>
+                            ))}
                         </div>
 
                         <div>
