@@ -94,13 +94,13 @@ const Forms: React.FC = () => {
         if (isMounted) {
           const list = orgData.organizations ?? [];
           setOrganizations(list);
-          const storedOrgId = localStorage.getItem('outform.activeOrganizationId');
+          const storedOrgId = localStorage.getItem('census.activeOrganizationId');
           const fallbackOrgId = list[0]?.id ?? null;
           const nextOrgId =
             storedOrgId && list.some((org) => org.id === storedOrgId) ? storedOrgId : fallbackOrgId;
           setActiveOrganizationId(nextOrgId);
           if (nextOrgId) {
-            localStorage.setItem('outform.activeOrganizationId', nextOrgId);
+            localStorage.setItem('census.activeOrganizationId', nextOrgId);
           }
         }
       } catch (err) {
@@ -138,7 +138,7 @@ const Forms: React.FC = () => {
           const list = data.workspaces ?? [];
           setWorkspaces(list);
           const storedWorkspaceId = localStorage.getItem(
-            `outform.activeWorkspaceId.${activeOrganizationId}`
+            `census.activeWorkspaceId.${activeOrganizationId}`
           );
           const fallbackId = list[0]?.id ?? null;
           const nextId =
@@ -147,7 +147,7 @@ const Forms: React.FC = () => {
               : fallbackId;
           setActiveWorkspaceId(nextId);
           if (nextId) {
-            localStorage.setItem(`outform.activeWorkspaceId.${activeOrganizationId}`, nextId);
+            localStorage.setItem(`census.activeWorkspaceId.${activeOrganizationId}`, nextId);
           }
         }
       } catch (err) {
@@ -380,7 +380,7 @@ const Forms: React.FC = () => {
   const setActiveWorkspace = (nextId: string | null) => {
     setActiveWorkspaceId(nextId);
     if (activeOrganizationId) {
-      const storageKey = `outform.activeWorkspaceId.${activeOrganizationId}`;
+      const storageKey = `census.activeWorkspaceId.${activeOrganizationId}`;
       if (nextId) {
         localStorage.setItem(storageKey, nextId);
       } else {
@@ -392,9 +392,9 @@ const Forms: React.FC = () => {
   const setActiveOrganization = (nextId: string | null) => {
     setActiveOrganizationId(nextId);
     if (nextId) {
-      localStorage.setItem('outform.activeOrganizationId', nextId);
+      localStorage.setItem('census.activeOrganizationId', nextId);
     } else {
-      localStorage.removeItem('outform.activeOrganizationId');
+      localStorage.removeItem('census.activeOrganizationId');
     }
     setActiveWorkspaceId(null);
     setWorkspaces([]);

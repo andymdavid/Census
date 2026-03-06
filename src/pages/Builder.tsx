@@ -271,8 +271,8 @@ const Builder: React.FC = () => {
   const publicLink = id ? `${origin}/f/${id}` : `${origin}/f/:id`;
   const inlineEmbed = `<iframe src="${publicLink}" style="width:100%;height:700px;border:0;" loading="lazy"></iframe>`;
   const fullscreenEmbed = `<iframe src="${publicLink}" style="position:fixed;inset:0;width:100%;height:100%;border:0;z-index:9999;"></iframe>`;
-  const embedScript = `<script src="${origin}/embed.js"></script>\n<div data-outform data-form-id="${id ?? ':id'}" data-mode="inline" data-height="700px"></div>`;
-  const embedScriptFullscreen = `<script src="${origin}/embed.js"></script>\n<div data-outform data-form-id="${id ?? ':id'}" data-mode="fullscreen"></div>`;
+  const embedScript = `<script src="${origin}/embed.js"></script>\n<div data-census data-form-id="${id ?? ':id'}" data-mode="inline" data-height="700px"></div>`;
+  const embedScriptFullscreen = `<script src="${origin}/embed.js"></script>\n<div data-census data-form-id="${id ?? ':id'}" data-mode="fullscreen"></div>`;
 
   const validationErrors = useMemo(() => validateSchema(schema), [schema]);
   const previewForm: LoadedFormSchema = useMemo(

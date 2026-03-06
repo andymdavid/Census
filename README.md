@@ -44,7 +44,7 @@ The assessment provides a score out of 100 points, indicating the level of vulne
 1. Clone the repository
 ```
 git clone <repository-url>
-cd Outform
+cd Census
 ```
 
 2. Install dependencies
@@ -62,7 +62,7 @@ npm start
 ## Project Structure
 
 ```
-Outform/
+Census/
 ├── public/                # Static assets
 ├── src/
 │   ├── pages/             # Main application pages

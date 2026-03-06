@@ -147,7 +147,7 @@ body {
   inset: auto;
 }
 
-/* Outform workspace utilities */
+/* Census workspace utilities */
 .of-heading {
   @apply text-lg font-semibold text-gray-800;
 }

@@ -28,7 +28,7 @@
   }
 
   function init() {
-    var nodes = document.querySelectorAll('[data-outform]');
+    var nodes = document.querySelectorAll('[data-census]');
     if (!nodes.length) return;
 
     nodes.forEach(function (node) {
@@ -43,7 +43,7 @@
 
       window.addEventListener('message', function (event) {
         if (!iframe || event.source !== iframe.contentWindow) return;
-        if (!event.data || event.data.type !== 'outform:resize') return;
+        if (!event.data || event.data.type !== 'census:resize') return;
         if (mode === 'fullscreen') return;
         if (typeof event.data.height === 'number') {
           iframe.style.height = event.data.height + 'px';
