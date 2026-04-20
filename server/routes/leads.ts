@@ -1,4 +1,5 @@
 import { formExists } from '../services/formsService';
+import { getAccessibleFormForUser } from '../services/formAccessService';
 import { createLead, listLeads } from '../services/leadsService';
 import { getSessionFromRequest } from '../services/sessionService';
 
@@ -73,6 +74,9 @@ export const handleLeadsRoutes = async (request: Request) => {
     const session = getSessionFromRequest(request);
     if (!session) {
       return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!session.pubkey || !getAccessibleFormForUser(formId, session.pubkey)) {
+      return jsonResponse({ error: 'Form not found.' }, { status: 404 });
     }
 
     return jsonResponse({ leads: listLeads(formId) });

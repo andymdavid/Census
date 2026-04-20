@@ -1,4 +1,5 @@
 import { formExists } from '../services/formsService';
+import { getAccessibleFormForUser } from '../services/formAccessService';
 import {
   createResponse,
   exportResponses,
@@ -46,7 +47,7 @@ export const handleResponsesRoutes = async (request: Request) => {
     if (!session) {
       return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!formExists(formId)) {
+    if (!session.pubkey || !getAccessibleFormForUser(formId, session.pubkey)) {
       return jsonResponse({ error: 'Form not found.' }, { status: 404 });
     }
     return jsonResponse(getSummary(formId));
@@ -59,7 +60,7 @@ export const handleResponsesRoutes = async (request: Request) => {
     if (!session) {
       return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!formExists(formId)) {
+    if (!session.pubkey || !getAccessibleFormForUser(formId, session.pubkey)) {
       return jsonResponse({ error: 'Form not found.' }, { status: 404 });
     }
     return jsonResponse(getFunnelStats(formId));
@@ -72,7 +73,7 @@ export const handleResponsesRoutes = async (request: Request) => {
     if (!session) {
       return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!formExists(formId)) {
+    if (!session.pubkey || !getAccessibleFormForUser(formId, session.pubkey)) {
       return jsonResponse({ error: 'Form not found.' }, { status: 404 });
     }
     const rows = exportResponses(formId);
@@ -149,6 +150,9 @@ export const handleResponsesRoutes = async (request: Request) => {
       const session = getSessionFromRequest(request);
       if (!session) {
         return jsonResponse({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (!session.pubkey || !getAccessibleFormForUser(formId, session.pubkey)) {
+        return jsonResponse({ error: 'Form not found.' }, { status: 404 });
       }
       const data = listResponses(formId);
       return jsonResponse(data);
