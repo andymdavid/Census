@@ -1,17 +1,25 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import './App.css';
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 
-// Import page components
-import Questions from './pages/Questions';
-import Results from './pages/Results';
-import ThankYou from './pages/ThankYou';
-import Forms from './pages/Forms';
-import Builder from './pages/Builder';
-import Analytics from './pages/Analytics';
-import PublicForm from './pages/PublicForm';
 import AuthGate from './components/AuthGate';
+
+const Questions = lazy(() => import('./pages/Questions'));
+const Results = lazy(() => import('./pages/Results'));
+const ThankYou = lazy(() => import('./pages/ThankYou'));
+const Forms = lazy(() => import('./pages/Forms'));
+const Builder = lazy(() => import('./pages/Builder'));
+const Analytics = lazy(() => import('./pages/Analytics'));
+const PublicForm = lazy(() => import('./pages/PublicForm'));
+
+const RouteFallback = () => (
+  <div className="typeform-fullscreen">
+    <div className="typeform-content">
+      <div className="text-gray-500">Loading...</div>
+    </div>
+  </div>
+);
 
 /**
  * AnimatedRoutes component
@@ -81,7 +89,9 @@ function App() {
   return (
     <Router>
       <div className="App">
-        <AnimatedRoutes />
+        <Suspense fallback={<RouteFallback />}>
+          <AnimatedRoutes />
+        </Suspense>
       </div>
     </Router>
   );

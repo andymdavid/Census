@@ -104,6 +104,10 @@ const NostrLoginModal: React.FC<NostrLoginModalProps> = ({ onSuccess }) => {
       const conversationKey = nip44.getConversationKey(clientSecret, bunkerConfig.pubkey);
 
       const sendRequest = async (method: string, params: unknown[]) => {
+        const activePool = pool;
+        if (!activePool) {
+          throw new Error('Bunker connection is not initialized.');
+        }
         const requestId = crypto.randomUUID();
         const payload = JSON.stringify({ id: requestId, method, params });
         const content = nip44.encrypt(payload, conversationKey);
@@ -117,8 +121,8 @@ const NostrLoginModal: React.FC<NostrLoginModalProps> = ({ onSuccess }) => {
           clientSecret
         );
 
-        await Promise.all(pool.publish(bunkerConfig.relays, event));
-        const responseEvent = await pool.get(
+        await Promise.all(activePool.publish(bunkerConfig.relays, event));
+        const responseEvent = await activePool.get(
           bunkerConfig.relays,
           {
             kinds: [24133],

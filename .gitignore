@@ -20,6 +20,10 @@
 *.sqlite
 *.sqlite3
 *.db
+remaining-work-plan.md
+ai-agent-form-builder-plan.md
+apps/logs/
+ecosystem.config.cjs
 
 npm-debug.log*
 yarn-debug.log*
