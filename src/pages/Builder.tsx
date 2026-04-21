@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Questions from './Questions';
-import type { FormQuestionSettings, FormSchemaV0 } from '../types/formSchema';
+import type {
+  FormBranchCondition,
+  FormBranchOperator,
+  FormQuestion,
+  FormQuestionSettings,
+  FormSchemaV0,
+} from '../types/formSchema';
 import type { LoadedFormSchema } from '../types/formSchema';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Switch from '@radix-ui/react-switch';
@@ -23,6 +29,8 @@ import {
   TextCursorInput,
   ToggleLeft,
 } from 'lucide-react';
+import { validateFormSchema } from '../../shared/formValidation';
+import { inferQuestionAnswerType } from '../../shared/formFlow';
 
 const defaultTheme = {
   primaryColor: '#4f46e5',
@@ -190,51 +198,31 @@ const questionTypeTemplates = [
   },
 ];
 
-const validateSchema = (schema: FormSchemaV0) => {
-  const errors: string[] = [];
-  const ids = schema.questions.map((question) => question.id);
-  const uniqueIds = new Set(ids);
-  if (uniqueIds.size !== ids.length) {
-    errors.push('Question IDs must be unique.');
-  }
-  schema.questions.forEach((question) => {
-    if (!question.text.trim()) {
-      errors.push(`Question ${question.id} is missing text.`);
-    }
-    if (!question.category.trim()) {
-      errors.push(`Question ${question.id} is missing a category.`);
-    }
-    if (!Number.isFinite(question.weight)) {
-      errors.push(`Question ${question.id} has an invalid weight.`);
-    }
-    const branching = question.branching;
-    if (branching?.next !== undefined && !uniqueIds.has(branching.next)) {
-      errors.push(`Question ${question.id} has an invalid default next target.`);
-    }
-    branching?.conditions?.forEach((condition, index) => {
-      if (!uniqueIds.has(condition.next)) {
-        errors.push(`Question ${question.id} condition ${index + 1} has an invalid next target.`);
-      }
-    });
-  });
+const getTemplateQuestionKind = (
+  key: (typeof questionTypeTemplates)[number]['key']
+): FormQuestionSettings['kind'] => {
+  if (key === 'welcome') return 'welcome';
+  if (key === 'end') return 'end';
+  if (key === 'group') return 'group';
+  if (key === 'yesno') return 'yesno';
+  if (key === 'mc') return 'multiple';
+  if (key === 'long') return 'long';
+  if (key === 'email') return 'email';
+  if (key === 'number') return 'number';
+  if (key === 'date') return 'date';
+  return undefined;
+};
 
-  schema.results.forEach((result, index) => {
-    if (!result.label.trim()) {
-      errors.push(`Result ${index + 1} is missing a label.`);
-    }
-    if (!result.description.trim()) {
-      errors.push(`Result ${index + 1} is missing a description.`);
-    }
-    if (
-      result.minScore !== undefined &&
-      result.maxScore !== undefined &&
-      result.minScore > result.maxScore
-    ) {
-      errors.push(`Result ${index + 1} has min score greater than max score.`);
-    }
-  });
-
-  return errors;
+const getTemplateAnswerType = (
+  key: (typeof questionTypeTemplates)[number]['key']
+): NonNullable<FormQuestionSettings['answerType']> => {
+  if (key === 'mc') return 'multiple';
+  if (key === 'yesno') return 'yesno';
+  if (key === 'long') return 'long';
+  if (key === 'email') return 'email';
+  if (key === 'number') return 'number';
+  if (key === 'date') return 'date';
+  return 'short';
 };
 
 const getTotalScore = (schema: FormSchemaV0) =>
@@ -244,6 +232,89 @@ const getNextId = (schema: FormSchemaV0, id: number) => {
   const index = schema.questions.findIndex((question) => question.id === id);
   if (index === -1) return schema.questions[0]?.id ?? id;
   return schema.questions[index + 1]?.id ?? schema.questions[index]?.id ?? id;
+};
+
+interface AiPreviewData {
+  model: string;
+  repaired?: boolean;
+  spec: {
+    title: string;
+    description?: string;
+    steps: Array<{ stepRef: string; title: string; kind: string }>;
+    assumptions?: Array<{ type: 'assumption' | 'ambiguity'; message: string }>;
+  };
+  schema: {
+    title: string;
+    description?: string;
+    questions: Array<{ id: number; category: string; text: string }>;
+    results: Array<{ label: string; description: string }>;
+    theme?: Record<string, string>;
+  };
+}
+
+const getBranchOperatorOptions = (question: FormQuestion) => {
+  const answerType = inferQuestionAnswerType(question);
+
+  if (answerType === 'yesno') {
+    return [];
+  }
+
+  if (answerType === 'number') {
+    return [
+      { value: 'equals', label: 'Equals' },
+      { value: 'not_equals', label: 'Does not equal' },
+      { value: 'greater_than', label: 'Greater than' },
+      { value: 'greater_than_or_equal', label: 'Greater than or equal' },
+      { value: 'less_than', label: 'Less than' },
+      { value: 'less_than_or_equal', label: 'Less than or equal' },
+      { value: 'is_empty', label: 'Is empty' },
+      { value: 'not_empty', label: 'Is not empty' },
+    ] satisfies Array<{ value: FormBranchOperator; label: string }>;
+  }
+
+  if (answerType === 'multiple') {
+    return [
+      { value: 'equals', label: 'Equals' },
+      { value: 'not_equals', label: 'Does not equal' },
+      { value: 'contains', label: 'Contains' },
+      { value: 'not_contains', label: 'Does not contain' },
+      { value: 'is_empty', label: 'Is empty' },
+      { value: 'not_empty', label: 'Is not empty' },
+    ] satisfies Array<{ value: FormBranchOperator; label: string }>;
+  }
+
+  return [
+    { value: 'equals', label: 'Equals' },
+    { value: 'not_equals', label: 'Does not equal' },
+    { value: 'contains', label: 'Contains' },
+    { value: 'not_contains', label: 'Does not contain' },
+    { value: 'is_empty', label: 'Is empty' },
+    { value: 'not_empty', label: 'Is not empty' },
+  ] satisfies Array<{ value: FormBranchOperator; label: string }>;
+};
+
+const createDefaultBranchCondition = (question: FormQuestion, nextId: number): FormBranchCondition => {
+  const answerType = inferQuestionAnswerType(question);
+
+  if (answerType === 'yesno') {
+    return { when: { answer: true }, next: nextId };
+  }
+
+  if (answerType === 'number') {
+    return { when: { operator: 'equals', value: 0 }, next: nextId };
+  }
+
+  const firstChoice = question.settings?.choices?.[0] ?? '';
+  return { when: { operator: 'equals', value: firstChoice }, next: nextId };
+};
+
+const conditionNeedsValue = (condition: FormBranchCondition) => {
+  const operator = condition.when.operator;
+  if (!operator) {
+    return false;
+  }
+
+  return operator !== 'is_empty' && operator !== 'not_empty';
 };
 
 const Builder: React.FC = () => {
@@ -265,6 +336,28 @@ const Builder: React.FC = () => {
   const [previewStep, setPreviewStep] = useState<'intro' | 'questions'>('intro');
   const [showShare, setShowShare] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiBrief, setAiBrief] = useState('');
+  const [aiModel, setAiModel] = useState('');
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiSubmitting, setAiSubmitting] = useState(false);
+  const [aiPreview, setAiPreview] = useState<AiPreviewData | null>(null);
+  const [aiFileName, setAiFileName] = useState<string | null>(null);
+
+  const readApiError = async (response: Response, fallback: string) => {
+    try {
+      const data = (await response.json()) as { error?: string; details?: string[] };
+      if (Array.isArray(data.details) && data.details.length > 0) {
+        return data.details[0];
+      }
+      if (data.error) {
+        return data.error;
+      }
+    } catch {
+      // ignore parse errors and use the fallback message
+    }
+    return fallback;
+  };
 
   const origin =
     typeof window !== 'undefined' ? window.location.origin : 'https://example.com';
@@ -274,7 +367,7 @@ const Builder: React.FC = () => {
   const embedScript = `<script src="${origin}/embed.js"></script>\n<div data-census data-form-id="${id ?? ':id'}" data-mode="inline" data-height="700px"></div>`;
   const embedScriptFullscreen = `<script src="${origin}/embed.js"></script>\n<div data-census data-form-id="${id ?? ':id'}" data-mode="fullscreen"></div>`;
 
-  const validationErrors = useMemo(() => validateSchema(schema), [schema]);
+  const validationErrors = useMemo(() => validateFormSchema(schema), [schema]);
   const previewForm: LoadedFormSchema = useMemo(
     () => ({ ...schema, totalScore: getTotalScore(schema) }),
     [schema]
@@ -285,6 +378,7 @@ const Builder: React.FC = () => {
     { label: '"Other" option', key: 'otherOption' },
   ];
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
+  const aiFileInputRef = useRef<HTMLInputElement | null>(null);
   const questionTitleRef = useRef<HTMLTextAreaElement | null>(null);
   const questionTitleMeasureRef = useRef<HTMLSpanElement | null>(null);
   const questionTitleContainerRef = useRef<HTMLDivElement | null>(null);
@@ -297,23 +391,7 @@ const Builder: React.FC = () => {
   const isSelectedEnd = selectedQuestion?.category === 'End Screen';
   const isSelectedGroup = selectedQuestion?.category === 'Question Group';
   const selectedSettings = selectedQuestion?.settings ?? {};
-  const inferredAnswerType =
-    selectedSettings.answerType ??
-    (selectedQuestion?.category === 'Multiple Choice'
-      ? 'multiple'
-      : selectedQuestion?.category === 'Yes/No'
-        ? 'yesno'
-        : selectedQuestion?.category === 'Text'
-          ? 'long'
-        : selectedQuestion?.category === 'Short Text'
-            ? 'long'
-            : selectedQuestion?.category === 'Email'
-              ? 'email'
-            : selectedQuestion?.category === 'Number'
-                ? 'number'
-                : selectedQuestion?.category === 'Date'
-                  ? 'date'
-                  : 'short');
+  const inferredAnswerType = selectedQuestion ? inferQuestionAnswerType(selectedQuestion) : 'short';
 
   useEffect(() => {
     let isMounted = true;
@@ -390,7 +468,7 @@ const Builder: React.FC = () => {
         }),
       });
       if (!response.ok) {
-        throw new Error('Failed to create form.');
+        throw new Error(await readApiError(response, 'Failed to create form.'));
       }
       const data = (await response.json()) as { id?: string };
       if (data.id) {
@@ -405,51 +483,125 @@ const Builder: React.FC = () => {
     }
   };
 
+  const handleGenerateAiPreview = async () => {
+    const brief = aiBrief.trim();
+    if (!brief) {
+      setAiError('A markdown brief is required.');
+      return;
+    }
+
+    setAiSubmitting(true);
+    setAiError(null);
+    setAiPreview(null);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/ai/forms/spec', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brief,
+          model: aiModel.trim() || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        setAiError(await readApiError(response, 'Unable to generate AI draft.'));
+        return;
+      }
+
+      const data = (await response.json()) as AiPreviewData;
+      setAiPreview(data);
+    } catch {
+      setAiError('Unable to generate AI preview. Check your connection and try again.');
+    } finally {
+      setAiSubmitting(false);
+    }
+  };
+
+  const handleCreateAiDraft = async () => {
+    const params = new URLSearchParams(location.search);
+    const workspaceId = params.get('workspaceId');
+    if (!workspaceId) {
+      setAiError('Workspace is required to create an AI draft.');
+      return;
+    }
+    if (!aiPreview?.schema) {
+      setAiError('Generate a preview before creating a draft.');
+      return;
+    }
+
+    setAiSubmitting(true);
+    setAiError(null);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/forms', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: aiPreview.schema.title,
+          schema: aiPreview.schema,
+          workspaceId,
+        }),
+      });
+
+      if (!response.ok) {
+        setAiError(await readApiError(response, 'Unable to create AI draft.'));
+        return;
+      }
+
+      const data = (await response.json()) as { id?: string };
+      if (!data.id) {
+        setAiError('AI draft creation did not return a form ID.');
+        return;
+      }
+
+      setTemplateModalOpen(false);
+      setAiDialogOpen(false);
+      setAiBrief('');
+      setAiModel('');
+      setAiPreview(null);
+      navigate(`/forms/${data.id}/edit`);
+    } catch {
+      setAiError('Unable to create AI draft. Check your connection and try again.');
+    } finally {
+      setAiSubmitting(false);
+    }
+  };
+
+  const handleAiFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      const contents = await file.text();
+      setAiBrief(contents);
+      setAiFileName(file.name);
+      setAiError(null);
+      setAiPreview(null);
+    } catch {
+      setAiError('Unable to read the uploaded markdown file.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   const addQuestionFromTemplate = (template: (typeof questionTypeTemplates)[number]) => {
     const nextId =
       schema.questions.reduce((maxId, question) => Math.max(maxId, question.id), 0) + 1;
-    const nextQuestion = {
+    const nextQuestion: FormSchemaV0['questions'][number] = {
       id: nextId,
       text: template.questionText,
       weight: 0,
       category: template.category,
       settings: {
-        kind:
-          template.key === 'welcome'
-            ? 'welcome'
-            : template.key === 'end'
-              ? 'end'
-              : template.key === 'group'
-                ? 'group'
-                : template.key === 'yesno'
-                  ? 'yesno'
-                : template.key === 'mc'
-                  ? 'multiple'
-                  : template.key === 'short'
-                    ? 'short'
-                    : template.key === 'long'
-                      ? 'long'
-                      : template.key === 'email'
-                        ? 'email'
-                        : template.key === 'number'
-                          ? 'number'
-                          : template.key === 'date'
-                            ? 'date'
-                            : undefined,
-        answerType:
-          template.key === 'mc'
-            ? 'multiple'
-            : template.key === 'yesno'
-              ? 'yesno'
-              : template.key === 'long'
-                ? 'long'
-                : template.key === 'email'
-                  ? 'email'
-                  : template.key === 'number'
-                    ? 'number'
-                    : template.key === 'date'
-                      ? 'date'
-                      : 'short',
+        kind: getTemplateQuestionKind(template.key),
+        answerType: getTemplateAnswerType(template.key),
         buttonLabel: template.key === 'welcome' ? 'Start' : template.key === 'end' ? 'Finish' : undefined,
       },
     };
@@ -542,7 +694,7 @@ const Builder: React.FC = () => {
 
   const addQuestion = () => {
     const nextId = schema.questions.reduce((maxId, question) => Math.max(maxId, question.id), 0) + 1;
-    const nextQuestion = {
+    const nextQuestion: FormSchemaV0['questions'][number] = {
       id: nextId,
       text: 'New question',
       weight: 0,
@@ -612,13 +764,14 @@ const Builder: React.FC = () => {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to create form.');
+          throw new Error(await readApiError(response, 'Failed to create form.'));
         }
 
         const data = (await response.json()) as { id?: string };
         if (data.id) {
-          setSchema((prev) => ({ ...prev, id: data.id }));
-          navigate(`/forms/${data.id}/edit`);
+          const newId = data.id;
+          setSchema((prev) => ({ ...prev, id: newId }));
+          navigate(`/forms/${newId}/edit`);
         }
       } else if (id) {
         const response = await fetch(`/api/forms/${id}`, {
@@ -630,7 +783,7 @@ const Builder: React.FC = () => {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to update form.');
+          throw new Error(await readApiError(response, 'Failed to update form.'));
         }
       }
 
@@ -651,7 +804,7 @@ const Builder: React.FC = () => {
         method: 'POST',
       });
       if (!response.ok) {
-        throw new Error('Failed to publish form.');
+        throw new Error(await readApiError(response, 'Failed to publish form.'));
       }
       setPublished(true);
       setStatus('success');
@@ -698,6 +851,20 @@ const Builder: React.FC = () => {
               <div className="space-y-3">
                 <div className="text-xs uppercase tracking-wide text-gray-400 mb-2">Templates</div>
                 <div className="space-y-2">
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 rounded-xl border border-gray-200 bg-white hover:border-primary/60 hover:shadow-sm transition text-sm text-gray-700 flex items-center gap-3"
+                    onClick={() => {
+                      setAiError(null);
+                      setAiDialogOpen(true);
+                    }}
+                    disabled={creating}
+                  >
+                    <span className="h-8 w-8 rounded-lg inline-flex items-center justify-center bg-emerald-100 text-emerald-700">
+                      <MessageSquareText className="h-4 w-4" />
+                    </span>
+                    <span>Generate with AI</span>
+                  </button>
                   {templateSchemas.map((template) => (
                     <button
                       key={template.key}
@@ -765,9 +932,181 @@ const Builder: React.FC = () => {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+      <Dialog.Root
+        open={aiDialogOpen}
+        onOpenChange={(open) => {
+          setAiDialogOpen(open);
+          if (!open) {
+            setAiError(null);
+            setAiSubmitting(false);
+            setAiPreview(null);
+            setAiFileName(null);
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl focus:outline-none">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <Dialog.Title className="text-lg font-semibold text-gray-900">
+                  Generate form with AI
+                </Dialog.Title>
+                <Dialog.Description className="text-sm text-gray-500 mt-1">
+                  Paste a plain-English markdown brief and Census will create a draft form in the current workspace.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-3 py-1 rounded-xl border border-gray-200">
+                Close
+              </Dialog.Close>
+            </div>
+
+            <div className="space-y-4">
+              {aiError && <div className="text-sm text-red-600">{aiError}</div>}
+              {aiPreview && (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <div className="text-sm font-medium text-gray-800">{aiPreview.spec.title}</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Model: {aiPreview.model}
+                        {aiPreview.repaired ? ' • repaired after validation feedback' : ''}
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {aiPreview.spec.steps.length} steps • {aiPreview.schema.results.length} result bands
+                    </div>
+                  </div>
+
+                  {aiPreview.spec.assumptions && aiPreview.spec.assumptions.length > 0 && (
+                    <div>
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
+                        Assumptions and ambiguities
+                      </div>
+                      <div className="space-y-2">
+                        {aiPreview.spec.assumptions.map((item, index) => (
+                          <div
+                            key={`${item.type}-${index}`}
+                            className={`rounded-lg px-3 py-2 text-sm ${
+                              item.type === 'ambiguity'
+                                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                : 'bg-white text-gray-700 border border-gray-200'
+                            }`}
+                          >
+                            <span className="font-medium capitalize">{item.type}:</span> {item.message}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
+                      Generated structure
+                    </div>
+                    <div className="space-y-2">
+                      {aiPreview.spec.steps.map((step) => (
+                        <div key={step.stepRef} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                          <div className="text-sm font-medium text-gray-800">{step.title}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {step.stepRef} • {step.kind}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div>
+                <label htmlFor="builder-ai-model" className="text-xs text-gray-500">
+                  Model override
+                </label>
+                <input
+                  id="builder-ai-model"
+                  type="text"
+                  value={aiModel}
+                  onChange={(event) => setAiModel(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Optional. Leave blank to use the server default."
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <label htmlFor="builder-ai-brief" className="text-xs text-gray-500">
+                    Markdown brief
+                  </label>
+                  <div className="flex items-center gap-3">
+                    {aiFileName && <div className="text-xs text-gray-500">{aiFileName}</div>}
+                    <input
+                      ref={aiFileInputRef}
+                      type="file"
+                      accept=".md,.markdown,text/markdown,text/plain"
+                      className="hidden"
+                      onChange={handleAiFileUpload}
+                    />
+                    <button
+                      type="button"
+                      className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                      onClick={() => aiFileInputRef.current?.click()}
+                      disabled={aiSubmitting}
+                    >
+                      Upload markdown
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  id="builder-ai-brief"
+                  rows={14}
+                  value={aiBrief}
+                  onChange={(event) => {
+                    setAiBrief(event.target.value);
+                    if (aiFileName) {
+                      setAiFileName(null);
+                    }
+                  }}
+                  className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder={`# Form brief
+
+Build a qualification form for inbound B2B leads.
+
+- Start with a short welcome screen
+- Ask whether they have budget approval
+- If yes, ask team size and timeline
+- If no, end early
+- Score higher for strong intent
+- Add a short end screen`}
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Dialog.Close className="text-sm text-gray-600 hover:text-gray-800 px-3 py-2">
+                  Cancel
+                </Dialog.Close>
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm hover:bg-gray-50 transition disabled:bg-gray-100 disabled:text-gray-400"
+                  onClick={handleGenerateAiPreview}
+                  disabled={aiSubmitting}
+                >
+                  {aiSubmitting ? 'Generating...' : aiPreview ? 'Regenerate preview' : 'Generate preview'}
+                </button>
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl bg-[#177767] text-white text-sm hover:bg-[#146957] transition disabled:bg-gray-300"
+                  onClick={handleCreateAiDraft}
+                  disabled={aiSubmitting || !aiPreview}
+                >
+                  {aiSubmitting && aiPreview ? 'Creating...' : 'Create draft'}
+                </button>
+              </div>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
       <div className="h-14 px-6 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-[260px]">
-          <div className="text-[20px] text-gray-800 of-logo-text">Census</div>
+          <Link to="/forms" className="text-[20px] text-gray-800 of-logo-text hover:text-gray-600 transition">
+            Census
+          </Link>
           <div className="text-sm text-gray-300">|</div>
           <input
             type="text"
@@ -1721,10 +2060,7 @@ const Builder: React.FC = () => {
                           ...question,
                           branching: {
                             next: nextId,
-                            conditions: [
-                              { when: { answer: true }, next: nextId },
-                              { when: { answer: false }, next: nextId },
-                            ],
+                            conditions: [createDefaultBranchCondition(question, nextId)],
                           },
                         }));
                       }}
@@ -1735,75 +2071,273 @@ const Builder: React.FC = () => {
 
                   {selectedQuestion.branching && (
                     <div className="space-y-3">
-                      <div>
-                        <label className="of-label">Yes →</label>
-                        <select
-                          value={
-                            selectedQuestion.branching.conditions?.find((c) => c.when.answer)?.next ??
-                            ''
-                          }
-                          onChange={(event) => {
-                            const nextValue = Number(event.target.value);
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs uppercase tracking-wide text-gray-500">
+                          Conditions
+                        </div>
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                          onClick={() => {
+                            const nextId = getNextId(schema, selectedQuestion.id);
                             updateQuestion(selectedQuestion.id, (question) => ({
                               ...question,
                               branching: {
                                 ...(question.branching ?? {}),
                                 conditions: [
-                                  { when: { answer: true }, next: nextValue },
-                                  {
-                                    when: { answer: false },
-                                    next:
-                                      question.branching?.conditions?.find((c) => !c.when.answer)
-                                        ?.next ?? nextValue,
-                                  },
+                                  ...(question.branching?.conditions ?? []),
+                                  createDefaultBranchCondition(question, nextId),
                                 ],
                               },
                             }));
                           }}
-                          className="of-input"
                         >
-                          {questionOptions.map((option) => (
-                            <option key={`yes-${option}`} value={option}>
-                              Question {option}
-                            </option>
-                          ))}
-                        </select>
+                          Add condition
+                        </button>
                       </div>
 
-                      <div>
-                        <label className="of-label">No →</label>
-                        <select
-                          value={
-                            selectedQuestion.branching.conditions?.find((c) => !c.when.answer)?.next ??
-                            ''
-                          }
-                          onChange={(event) => {
-                            const nextValue = Number(event.target.value);
-                            updateQuestion(selectedQuestion.id, (question) => ({
-                              ...question,
-                              branching: {
-                                ...(question.branching ?? {}),
-                                conditions: [
-                                  {
-                                    when: { answer: true },
-                                    next:
-                                      question.branching?.conditions?.find((c) => c.when.answer)
-                                        ?.next ?? nextValue,
-                                  },
-                                  { when: { answer: false }, next: nextValue },
-                                ],
-                              },
-                            }));
-                          }}
-                          className="of-input"
-                        >
-                          {questionOptions.map((option) => (
-                            <option key={`no-${option}`} value={option}>
-                              Question {option}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      {(selectedQuestion.branching.conditions ?? []).length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-gray-200 px-4 py-3 text-sm text-gray-500">
+                          No conditions yet. Add one to route answers to a different step.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {(selectedQuestion.branching.conditions ?? []).map((condition, index) => {
+                            const answerType = inferQuestionAnswerType(selectedQuestion);
+                            const operatorOptions = getBranchOperatorOptions(selectedQuestion);
+                            const multipleChoiceOptions = [
+                              ...(selectedQuestion.settings?.choices ?? []),
+                              ...(selectedQuestion.settings?.otherOption ? ['Other'] : []),
+                            ];
+                            const valueString =
+                              typeof condition.when.value === 'number'
+                                ? String(condition.when.value)
+                                : typeof condition.when.value === 'boolean'
+                                  ? condition.when.value
+                                    ? 'true'
+                                    : 'false'
+                                  : (condition.when.value ?? '');
+
+                            return (
+                              <div
+                                key={`branch-condition-${selectedQuestion.id}-${index}`}
+                                className="space-y-3 rounded-2xl border border-gray-200 p-4"
+                              >
+                                <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)_minmax(0,180px)_auto]">
+                                  <div>
+                                    <label className="of-label">When</label>
+                                    {answerType === 'yesno' ? (
+                                      <select
+                                        value={condition.when.answer ? 'yes' : 'no'}
+                                        onChange={(event) => {
+                                          const nextAnswer = event.target.value === 'yes';
+                                          updateQuestion(selectedQuestion.id, (question) => ({
+                                            ...question,
+                                            branching: {
+                                              ...(question.branching ?? {}),
+                                              conditions: (question.branching?.conditions ?? []).map(
+                                                (entry, entryIndex) =>
+                                                  entryIndex === index
+                                                    ? { ...entry, when: { answer: nextAnswer } }
+                                                    : entry
+                                              ),
+                                            },
+                                          }));
+                                        }}
+                                        className="of-input"
+                                      >
+                                        <option value="yes">Answer is Yes</option>
+                                        <option value="no">Answer is No</option>
+                                      </select>
+                                    ) : (
+                                      <select
+                                        value={condition.when.operator ?? 'equals'}
+                                        onChange={(event) => {
+                                          const operator = event.target.value as FormBranchOperator;
+                                          updateQuestion(selectedQuestion.id, (question) => ({
+                                            ...question,
+                                            branching: {
+                                              ...(question.branching ?? {}),
+                                              conditions: (question.branching?.conditions ?? []).map(
+                                                (entry, entryIndex) =>
+                                                  entryIndex === index
+                                                    ? {
+                                                        ...entry,
+                                                        when: {
+                                                          operator,
+                                                          value:
+                                                            operator === 'is_empty' ||
+                                                            operator === 'not_empty'
+                                                              ? undefined
+                                                              : entry.when.value ??
+                                                                (answerType === 'number'
+                                                                  ? 0
+                                                                  : question.settings?.choices?.[0] ??
+                                                                    ''),
+                                                        },
+                                                      }
+                                                    : entry
+                                              ),
+                                            },
+                                          }));
+                                        }}
+                                        className="of-input"
+                                      >
+                                        {operatorOptions.map((option) => (
+                                          <option key={option.value} value={option.value}>
+                                            {option.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
+                                  </div>
+
+                                  <div>
+                                    <label className="of-label">Value</label>
+                                    {answerType === 'yesno' || !conditionNeedsValue(condition) ? (
+                                      <div className="of-input flex items-center text-gray-400">
+                                        Not required
+                                      </div>
+                                    ) : answerType === 'multiple' ? (
+                                      <select
+                                        value={valueString}
+                                        onChange={(event) => {
+                                          const nextValue = event.target.value;
+                                          updateQuestion(selectedQuestion.id, (question) => ({
+                                            ...question,
+                                            branching: {
+                                              ...(question.branching ?? {}),
+                                              conditions: (question.branching?.conditions ?? []).map(
+                                                (entry, entryIndex) =>
+                                                  entryIndex === index
+                                                    ? {
+                                                        ...entry,
+                                                        when: { ...entry.when, value: nextValue },
+                                                      }
+                                                    : entry
+                                              ),
+                                            },
+                                          }));
+                                        }}
+                                        className="of-input"
+                                      >
+                                        {multipleChoiceOptions.map((option) => (
+                                          <option key={`${selectedQuestion.id}-${option}`} value={option}>
+                                            {option}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : answerType === 'number' ? (
+                                      <input
+                                        type="number"
+                                        value={valueString}
+                                        onChange={(event) => {
+                                          const nextValue = Number(event.target.value);
+                                          updateQuestion(selectedQuestion.id, (question) => ({
+                                            ...question,
+                                            branching: {
+                                              ...(question.branching ?? {}),
+                                              conditions: (question.branching?.conditions ?? []).map(
+                                                (entry, entryIndex) =>
+                                                  entryIndex === index
+                                                    ? {
+                                                        ...entry,
+                                                        when: {
+                                                          ...entry.when,
+                                                          value: Number.isFinite(nextValue)
+                                                            ? nextValue
+                                                            : 0,
+                                                        },
+                                                      }
+                                                    : entry
+                                              ),
+                                            },
+                                          }));
+                                        }}
+                                        className="of-input"
+                                      />
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        value={valueString}
+                                        onChange={(event) => {
+                                          const nextValue = event.target.value;
+                                          updateQuestion(selectedQuestion.id, (question) => ({
+                                            ...question,
+                                            branching: {
+                                              ...(question.branching ?? {}),
+                                              conditions: (question.branching?.conditions ?? []).map(
+                                                (entry, entryIndex) =>
+                                                  entryIndex === index
+                                                    ? {
+                                                        ...entry,
+                                                        when: { ...entry.when, value: nextValue },
+                                                      }
+                                                    : entry
+                                              ),
+                                            },
+                                          }));
+                                        }}
+                                        className="of-input"
+                                        placeholder="Comparison value"
+                                      />
+                                    )}
+                                  </div>
+
+                                  <div>
+                                    <label className="of-label">Go to</label>
+                                    <select
+                                      value={condition.next}
+                                      onChange={(event) => {
+                                        const nextValue = Number(event.target.value);
+                                        updateQuestion(selectedQuestion.id, (question) => ({
+                                          ...question,
+                                          branching: {
+                                            ...(question.branching ?? {}),
+                                            conditions: (question.branching?.conditions ?? []).map(
+                                              (entry, entryIndex) =>
+                                                entryIndex === index
+                                                  ? { ...entry, next: nextValue }
+                                                  : entry
+                                            ),
+                                          },
+                                        }));
+                                      }}
+                                      className="of-input"
+                                    >
+                                      {questionOptions.map((option) => (
+                                        <option key={`condition-next-${index}-${option}`} value={option}>
+                                          Question {option}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  <div className="flex items-end">
+                                    <button
+                                      type="button"
+                                      className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                                      onClick={() => {
+                                        updateQuestion(selectedQuestion.id, (question) => ({
+                                          ...question,
+                                          branching: {
+                                            ...(question.branching ?? {}),
+                                            conditions: (question.branching?.conditions ?? []).filter(
+                                              (_, entryIndex) => entryIndex !== index
+                                            ),
+                                          },
+                                        }));
+                                      }}
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
 
                       <div>
                         <label className="of-label">Default next</label>
