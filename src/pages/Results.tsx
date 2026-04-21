@@ -38,42 +38,72 @@ const Results: React.FC<ResultsProps> = () => {
   const [name, setName] = useState('');
   const [company, setCompany] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   // State to track if we're transitioning out
   const [isExiting, setIsExiting] = useState(false);
 
   // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // In a real app, you would send this data to a server
-    console.log({ name, email, company, score });
+  const readApiError = async (response: Response, fallback: string) => {
+    try {
+      const data = (await response.json()) as { error?: string };
+      if (data.error) {
+        return data.error;
+      }
+    } catch {
+      // ignore parse errors and use the fallback message
+    }
+    return fallback;
+  };
+
+  const finishFlow = () => {
     setSubmitted(true);
 
-    if (formId) {
-      fetch(`/api/forms/${formId}/leads`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          email,
-          company,
-          responseId,
-        }),
-      }).catch(() => {
-        // ignore lead submission errors
-      });
-    }
-    
     // Delay navigation to allow transition animation
     setTimeout(() => {
       setIsExiting(true);
-      
+
       // Navigate to thank you page after exit animation
       setTimeout(() => {
         navigate('/thank-you');
       }, 500);
     }, 1000);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitError(null);
+    setSubmitting(true);
+
+    if (formId) {
+      try {
+        const response = await fetch(`/api/forms/${formId}/leads`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name,
+            email,
+            company,
+            responseId,
+          }),
+        });
+        if (!response.ok) {
+          setSubmitError(await readApiError(response, 'Unable to submit your details.'));
+          setSubmitting(false);
+          return;
+        }
+      } catch {
+        setSubmitError('Unable to submit your details. Check your connection and try again.');
+        setSubmitting(false);
+        return;
+      }
+    }
+
+    setSubmitting(false);
+    finishFlow();
   };
 
   // Get result category based on score
@@ -219,6 +249,11 @@ const Results: React.FC<ResultsProps> = () => {
               onSubmit={handleSubmit}
               className="w-full max-w-md"
             >
+              {submitError && (
+                <div className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {submitError}
+                </div>
+              )}
               <div className="mb-6">
                 <label htmlFor="name" className="block text-sm font-medium text-gray-600 mb-2">
                   Name
@@ -264,10 +299,11 @@ const Results: React.FC<ResultsProps> = () => {
                 type="submit"
                 className="typeform-button w-full"
                 variants={buttonVariants}
-                whileHover="hover"
-                whileTap="tap"
+                whileHover={submitting ? undefined : 'hover'}
+                whileTap={submitting ? undefined : 'tap'}
+                disabled={submitting}
               >
-                Contact Stakwork
+                {submitting ? 'Submitting...' : 'Contact Stakwork'}
               </motion.button>
             </motion.form>
           </motion.div>

@@ -74,9 +74,14 @@ db.exec(`
     form_id TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     score INTEGER NOT NULL,
-    meta_json TEXT
+    meta_json TEXT,
+    completed INTEGER NOT NULL DEFAULT 1
   );
 `);
+
+try {
+  db.exec('ALTER TABLE responses ADD COLUMN completed INTEGER NOT NULL DEFAULT 1;');
+} catch {}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS answers (

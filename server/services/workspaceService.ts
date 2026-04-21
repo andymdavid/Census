@@ -5,6 +5,7 @@ export interface WorkspaceRecord {
   id: string;
   name: string;
   organization_id: string;
+  role?: string;
   created_at: number;
   updated_at: number;
 }
@@ -29,7 +30,7 @@ const selectWorkspacesForUser = db.prepare(
 );
 const selectWorkspacesForOrgAndUser = db.prepare(
   `
-  SELECT w.id, w.name, w.organization_id, w.created_at, w.updated_at
+  SELECT w.id, w.name, w.organization_id, m.role, w.created_at, w.updated_at
   FROM workspaces w
   INNER JOIN workspace_members m ON m.workspace_id = w.id
   WHERE m.pubkey = ? AND w.organization_id = ?

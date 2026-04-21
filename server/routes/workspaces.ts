@@ -92,8 +92,12 @@ export const handleWorkspacesRoutes = async (request: Request) => {
 
   if (match && request.method === 'PUT') {
     const workspaceId = match[1];
-    if (!isWorkspaceMember(workspaceId, session.pubkey)) {
+    const role = getWorkspaceMemberRole(workspaceId, session.pubkey);
+    if (!role) {
       return jsonResponse({ error: 'Not found' }, { status: 404 });
+    }
+    if (role !== 'owner') {
+      return jsonResponse({ error: 'Forbidden' }, { status: 403 });
     }
     const payload = await readJson<{ name?: string }>(request);
     const name = payload?.name?.trim();
@@ -142,8 +146,12 @@ export const handleWorkspacesRoutes = async (request: Request) => {
   const inviteMatch = path.match(/^\/api\/workspaces\/([^/]+)\/invite$/);
   if (inviteMatch && request.method === 'POST') {
     const workspaceId = inviteMatch[1];
-    if (!isWorkspaceMember(workspaceId, session.pubkey)) {
+    const role = getWorkspaceMemberRole(workspaceId, session.pubkey);
+    if (!role) {
       return jsonResponse({ error: 'Not found' }, { status: 404 });
+    }
+    if (role !== 'owner') {
+      return jsonResponse({ error: 'Forbidden' }, { status: 403 });
     }
     const payload = await readJson<{ pubkey?: string }>(request);
     const normalized = normalizePubkey(payload?.pubkey ?? '');

@@ -8,6 +8,7 @@ import {
 } from '../services/formsService';
 import { getSessionFromRequest } from '../services/sessionService';
 import { isWorkspaceMember } from '../services/workspaceService';
+import { parseAndValidateFormSchema } from '../../shared/formValidation';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
   return new Response(JSON.stringify(data), {
@@ -63,8 +64,12 @@ export const handleFormsRoutes = async (request: Request) => {
     if (!isWorkspaceMember(workspaceId, session?.pubkey ?? '')) {
       return jsonResponse({ error: 'Not found.' }, { status: 404 });
     }
+    const { schema, errors } = parseAndValidateFormSchema(payload?.schema ?? {});
+    if (!schema || errors.length > 0) {
+      return jsonResponse({ error: 'Invalid form schema.', details: errors }, { status: 400 });
+    }
 
-    const created = createForm({ title, schema: payload?.schema ?? {}, workspaceId });
+    const created = createForm({ title, schema, workspaceId });
     return jsonResponse({ id: created.id });
   }
 
@@ -135,8 +140,12 @@ export const handleFormsRoutes = async (request: Request) => {
       if (!title) {
         return jsonResponse({ error: 'Title is required.' }, { status: 400 });
       }
+      const { schema, errors } = parseAndValidateFormSchema(payload?.schema ?? {});
+      if (!schema || errors.length > 0) {
+        return jsonResponse({ error: 'Invalid form schema.', details: errors }, { status: 400 });
+      }
 
-      updateFormById(formId, { title, schema: payload?.schema ?? {} });
+      updateFormById(formId, { title, schema });
       return jsonResponse({ ok: true });
     }
 

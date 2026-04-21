@@ -1,4 +1,4 @@
-import { formExists } from '../services/formsService';
+import { formExists, getFormById } from '../services/formsService';
 import { getAccessibleFormForUser } from '../services/formAccessService';
 import {
   createResponse,
@@ -8,6 +8,7 @@ import {
   listResponses,
 } from '../services/responsesService';
 import { getSessionFromRequest } from '../services/sessionService';
+import { parseAndValidateFormSchema, validateResponseSubmission } from '../../shared/formValidation';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
   return new Response(JSON.stringify(data), {
@@ -127,20 +128,51 @@ export const handleResponsesRoutes = async (request: Request) => {
 
     if (request.method === 'POST') {
       const payload = await readJson<{
+        responseId?: string;
         answers?: Array<{ questionId: string; answer: string }>;
         score?: number;
         meta?: unknown;
+        completed?: boolean;
       }>(request);
 
-      if (!payload?.answers || typeof payload.score !== 'number') {
+      if (!payload || !Array.isArray(payload.answers) || typeof payload.score !== 'number') {
         return jsonResponse({ error: 'Invalid payload.' }, { status: 400 });
+      }
+      const form = getFormById(formId);
+      if (!form) {
+        return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+      }
+      let storedSchema: unknown;
+      try {
+        storedSchema = JSON.parse(form.schema_json);
+      } catch {
+        return jsonResponse({ error: 'Form schema is invalid.' }, { status: 400 });
+      }
+      const { schema, errors: schemaErrors } = parseAndValidateFormSchema(storedSchema);
+      if (!schema || schemaErrors.length > 0) {
+        return jsonResponse({ error: 'Form schema is invalid.' }, { status: 400 });
+      }
+      const submissionPayload = {
+        answers: payload.answers,
+        score: payload.score,
+        meta: payload.meta,
+        completed: payload.completed,
+      };
+      const validationErrors = validateResponseSubmission(schema, submissionPayload);
+      if (validationErrors.length > 0) {
+        return jsonResponse(
+          { error: 'Invalid response submission.', details: validationErrors },
+          { status: 400 }
+        );
       }
 
       const created = createResponse({
+        responseId: payload.responseId,
         formId,
         score: payload.score,
         meta: payload.meta,
         answers: payload.answers,
+        completed: payload.completed,
       });
 
       return jsonResponse({ id: created.id });

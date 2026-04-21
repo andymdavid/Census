@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import Questions from './Questions';
-import { loadFormWithFallback } from '../data/loadForm';
+import { loadRequiredFormFromApi } from '../data/loadForm';
 import type { LoadedFormSchema } from '../types/formSchema';
 
 const PublicForm: React.FC = () => {
@@ -18,8 +18,13 @@ const PublicForm: React.FC = () => {
         return;
       }
 
-      const loaded = await loadFormWithFallback(id, true);
+      const loaded = await loadRequiredFormFromApi(id, { publicOnly: true });
       if (isMounted) {
+        if (!loaded) {
+          setError('This form could not be found or is not published.');
+          return;
+        }
+        setError(null);
         setForm(loaded);
       }
     };

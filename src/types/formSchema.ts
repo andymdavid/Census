@@ -1,6 +1,20 @@
+export type FormBranchOperator =
+  | 'equals'
+  | 'not_equals'
+  | 'contains'
+  | 'not_contains'
+  | 'greater_than'
+  | 'greater_than_or_equal'
+  | 'less_than'
+  | 'less_than_or_equal'
+  | 'is_empty'
+  | 'not_empty';
+
 export interface FormBranchCondition {
   when: {
-    answer: boolean;
+    answer?: boolean;
+    operator?: FormBranchOperator;
+    value?: string | number | boolean;
   };
   next: number;
 }

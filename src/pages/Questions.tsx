@@ -3,6 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { loadForm } from '../data/loadForm';
 import type { LoadedFormSchema } from '../types/formSchema';
+import {
+  getFirstAnswerableQuestionId,
+  inferQuestionAnswerType,
+  getNextQuestionId as getFormNextQuestionId,
+  isAnswerableQuestion,
+  type FormAnswerValue,
+  type ResponsePathMeta,
+} from '../../shared/formFlow';
 
 /**
  * Interface for Questions page props
@@ -31,13 +39,7 @@ const Questions: React.FC<QuestionsProps> = ({
   const allQuestions = form.questions;
   const welcomeScreen = allQuestions.find((q) => q.category === 'Welcome Screen') ?? null;
   const endScreen = allQuestions.find((q) => q.category === 'End Screen') ?? null;
-  const groupScreens = allQuestions.filter((q) => q.category === 'Question Group');
-  const questions = allQuestions.filter(
-    (q) =>
-      q.category !== 'Welcome Screen' &&
-      q.category !== 'End Screen' &&
-      q.category !== 'Question Group'
-  );
+  const questions = allQuestions.filter(isAnswerableQuestion);
   const totalScore = form.totalScore;
   const logoUrl = form.theme?.logoUrl;
   const themeStyles = form.theme
@@ -55,16 +57,20 @@ const Questions: React.FC<QuestionsProps> = ({
 
   // State to track current question index
   const [currentQuestionId, setCurrentQuestionId] = useState(
-    questions[0]?.id ?? 0
+    getFirstAnswerableQuestionId(form) ?? 0
   );
   // State to track user answers
   const [answers, setAnswers] = useState<Record<number, boolean | string | string[]>>({});
+  const [responseId, setResponseId] = useState<string | null>(null);
   // State to track history for branching
   const [history, setHistory] = useState<number[]>([]);
   // State to track direction of transition (forward/backward)
   const [direction, setDirection] = useState(1); // 1 for forward, -1 for backward
   const [showWelcome, setShowWelcome] = useState(Boolean(welcomeScreen));
   const [showEnd, setShowEnd] = useState(false);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // Handle answer selection
   const hasAnswer = (value?: boolean | string | string[]) => {
@@ -73,59 +79,66 @@ const Questions: React.FC<QuestionsProps> = ({
     return Boolean(value);
   };
 
+  const hasRecordedResponse = (value?: boolean | string | string[]) => {
+    if (typeof value === 'boolean') return true;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.trim().length > 0;
+    return false;
+  };
+
   const computeScore = (answersSnapshot: Record<number, boolean | string | string[]>) => {
     return questions.reduce((sum, question) => {
       return hasAnswer(answersSnapshot[question.id]) ? sum + question.weight : sum;
     }, 0);
   };
 
-  const getSequentialNextId = (questionId: number) => {
-    const index = allQuestions.findIndex((question) => question.id === questionId);
-    if (index === -1) return null;
-    return allQuestions[index + 1]?.id ?? null;
-  };
-
-  const getNextQuestionId = (questionId: number, answer: boolean) => {
-    const question = questionMap.get(questionId);
-    if (!question?.branching) {
-      return getSequentialNextId(questionId);
+  const readApiError = async (response: Response, fallback: string) => {
+    try {
+      const data = (await response.json()) as { error?: string; details?: string[] };
+      if (Array.isArray(data.details) && data.details.length > 0) {
+        return data.details[0];
+      }
+      if (data.error) {
+        return data.error;
+      }
+    } catch {
+      // ignore parse errors and fall back to the generic message below
     }
-
-    const conditions = question.branching.conditions;
-    if (conditions && conditions.length > 0) {
-      const matched = conditions.find((condition) => condition.when.answer === answer);
-      if (matched) return matched.next;
-    }
-
-    if (question.branching.next !== undefined) {
-      return question.branching.next;
-    }
-
-    return getSequentialNextId(questionId);
+    return fallback;
   };
 
   const submitResponse = async (
     answersSnapshot: Record<number, boolean | string | string[]>,
-    finalScore: number
+    finalScore: number,
+    meta: ResponsePathMeta,
+    completed: boolean
   ) => {
     if (!formId) return;
 
-    const visitedIds = [...history, currentQuestionId];
+    const visitedIds = meta.visitedQuestionIds ?? [...history, currentQuestionId];
     const payload = {
-      answers: visitedIds.map((questionId) => {
+      responseId: responseId ?? undefined,
+      answers: visitedIds.flatMap((questionId) => {
         const answer = answersSnapshot[questionId];
-        return {
-          questionId: String(questionId),
-          answer: Array.isArray(answer)
-            ? answer.join(', ')
-            : typeof answer === 'string'
-              ? answer
-              : answer
-                ? 'yes'
-                : 'no',
-        };
+        if (!hasRecordedResponse(answer)) {
+          return [];
+        }
+        return [
+          {
+            questionId: String(questionId),
+            answer: Array.isArray(answer)
+              ? answer.join(', ')
+              : typeof answer === 'string'
+                ? answer
+                : answer
+                  ? 'yes'
+                  : 'no',
+          },
+        ];
       }),
       score: finalScore,
+      meta,
+      completed,
     };
 
     try {
@@ -136,30 +149,61 @@ const Questions: React.FC<QuestionsProps> = ({
         },
         body: JSON.stringify(payload),
       });
-      if (!response.ok) return null;
+      if (!response.ok) {
+        return {
+          id: null,
+          error: await readApiError(response, 'Unable to save your response.'),
+        };
+      }
       const data = (await response.json()) as { id?: string };
-      return data.id ?? null;
+      const nextResponseId = data.id ?? null;
+      if (nextResponseId) {
+        setResponseId(nextResponseId);
+      }
+      return { id: nextResponseId, error: null };
     } catch {
-      // Ignore submission errors for now.
+      return {
+        id: null,
+        error: 'Unable to save your response. Check your connection and try again.',
+      };
     }
-    return null;
   };
 
   const proceedToNext = async (
     answersSnapshot: Record<number, boolean | string | string[]>,
-    answerBool: boolean
+    branchAnswer: FormAnswerValue
   ) => {
+    if (submitting) return;
     const updatedScore = computeScore(answersSnapshot);
     setDirection(1);
-    const nextId = getNextQuestionId(currentQuestionId, answerBool);
+    setSaveWarning(null);
+    setSubmitError(null);
+    const nextId = getFormNextQuestionId(form, currentQuestionId, branchAnswer);
+    const pathQuestionIds = [...history, currentQuestionId];
 
     if (nextId !== null && questionMap.has(nextId)) {
-      const nextHistory = [...history, currentQuestionId];
-      const visitedIds = new Set([...nextHistory, nextId]);
+      setSubmitting(true);
+      const draftResult = await submitResponse(
+        answersSnapshot,
+        updatedScore,
+        {
+          visitedQuestionIds: [...pathQuestionIds, nextId],
+          lastQuestionId: nextId,
+          completed: false,
+        },
+        false
+      );
+      setSubmitting(false);
+      if (draftResult?.error) {
+        setSaveWarning('Progress was not saved. You can continue, but draft recovery may be incomplete.');
+      }
+
+      const nextHistory = pathQuestionIds;
+      const retainedQuestionIds = new Set([...nextHistory, nextId]);
       const trimmedAnswers: Record<number, boolean | string | string[]> = {};
       for (const [key, value] of Object.entries(answersSnapshot)) {
         const numericKey = Number(key);
-        if (visitedIds.has(numericKey)) {
+        if (retainedQuestionIds.has(numericKey)) {
           trimmedAnswers[numericKey] = value as boolean | string | string[];
         }
       }
@@ -168,13 +212,29 @@ const Questions: React.FC<QuestionsProps> = ({
       setAnswers(trimmedAnswers);
       setCurrentQuestionId(nextId);
     } else {
-      const responseId = await submitResponse(answersSnapshot, updatedScore);
+      setSubmitting(true);
+      const finalResult = await submitResponse(
+        answersSnapshot,
+        updatedScore,
+        {
+          visitedQuestionIds: pathQuestionIds,
+          lastQuestionId: currentQuestionId,
+          completed: true,
+        },
+        true
+      );
+      setSubmitting(false);
+      if (finalResult?.error) {
+        setSubmitError(finalResult.error);
+        return;
+      }
+      const nextResponseId = finalResult?.id ?? null;
       if (onComplete) {
         onComplete(updatedScore);
       } else if (endScreen) {
         setShowEnd(true);
       } else {
-        navigate('/results', { state: { score: updatedScore, form, formId, responseId } });
+        navigate('/results', { state: { score: updatedScore, form, formId, responseId: nextResponseId } });
       }
     }
   };
@@ -215,7 +275,7 @@ const Questions: React.FC<QuestionsProps> = ({
       : [option];
     setAnswers((prev) => ({ ...prev, [currentQuestionId]: allowMultiple ? nextList : option }));
     if (!allowMultiple) {
-      void proceedToNext({ ...answers, [currentQuestionId]: option }, true);
+      void proceedToNext({ ...answers, [currentQuestionId]: option }, option);
     }
   };
 
@@ -224,23 +284,7 @@ const Questions: React.FC<QuestionsProps> = ({
   const currentIndex = currentIndexRaw === -1 ? 0 : currentIndexRaw;
   const currentStep = history.length + 1;
   const score = computeScore(answers);
-  const answerType =
-    question?.settings?.answerType ??
-    (question?.category === 'Multiple Choice'
-      ? 'multiple'
-      : question?.category === 'Yes/No'
-        ? 'yesno'
-        : question?.category === 'Text'
-          ? 'long'
-        : question?.category === 'Short Text'
-            ? 'long'
-            : question?.category === 'Email'
-              ? 'email'
-            : question?.category === 'Number'
-                ? 'number'
-                : question?.category === 'Date'
-                  ? 'date'
-                  : 'yesno');
+  const answerType = question ? inferQuestionAnswerType(question) : 'yesno';
   const isGroup = question?.category === 'Question Group';
   const isRequired = Boolean(question?.settings?.required);
   const currentAnswer = answers[currentQuestionId];
@@ -439,6 +483,17 @@ const Questions: React.FC<QuestionsProps> = ({
           <div className="text-sm text-gray-400 mb-8 text-center font-medium">
             Step {currentStep} of {questions.length}
           </div>
+          {(saveWarning || submitError) && (
+            <div
+              className={`mb-6 rounded-xl border px-4 py-3 text-sm ${
+                submitError
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : 'border-amber-200 bg-amber-50 text-amber-700'
+              }`}
+            >
+              {submitError ?? saveWarning}
+            </div>
+          )}
 
           {/* Animated question content */}
           <motion.div
@@ -531,7 +586,7 @@ const Questions: React.FC<QuestionsProps> = ({
                             if (!canContinue) return;
                             void proceedToNext(
                               { ...answers, [currentQuestionId]: currentAnswer ?? [] },
-                              hasAnswer(currentAnswer)
+                              Array.isArray(currentAnswer) ? currentAnswer : []
                             );
                           }}
                           className={`typeform-option-button ${
@@ -569,7 +624,7 @@ const Questions: React.FC<QuestionsProps> = ({
                     if (!canContinue) return;
                     void proceedToNext(
                       { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
-                      hasAnswer(currentAnswer)
+                      typeof currentAnswer === 'string' ? currentAnswer : ''
                     );
                   }}
                   className={`typeform-option-button mt-6 ${
@@ -616,7 +671,7 @@ const Questions: React.FC<QuestionsProps> = ({
                     if (!canContinue) return;
                     void proceedToNext(
                       { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
-                      hasAnswer(currentAnswer)
+                      typeof currentAnswer === 'string' ? currentAnswer : ''
                     );
                   }}
                   className={`typeform-option-button mt-6 ${
@@ -646,7 +701,7 @@ const Questions: React.FC<QuestionsProps> = ({
                     if (!canContinue) return;
                     void proceedToNext(
                       { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
-                      hasAnswer(currentAnswer)
+                      typeof currentAnswer === 'string' ? currentAnswer : ''
                     );
                   }}
                   className={`typeform-option-button mt-6 ${
@@ -682,7 +737,7 @@ const Questions: React.FC<QuestionsProps> = ({
                     if (!canContinue) return;
                     void proceedToNext(
                       { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
-                      hasAnswer(currentAnswer)
+                      typeof currentAnswer === 'string' ? currentAnswer : ''
                     );
                   }}
                   className={`typeform-option-button mt-6 ${
@@ -700,7 +755,7 @@ const Questions: React.FC<QuestionsProps> = ({
               <motion.div variants={itemVariants} className="mt-6 flex items-center gap-3">
                 <motion.button
                   onClick={() => {
-                    void proceedToNext({ ...answers }, true);
+                    void proceedToNext({ ...answers }, undefined);
                   }}
                   className="typeform-button"
                   variants={buttonVariants}
@@ -722,6 +777,7 @@ const Questions: React.FC<QuestionsProps> = ({
                         variants={buttonVariants}
                         whileHover="hover"
                         whileTap="tap"
+                        disabled={submitting}
                       >
                         Yes
                       </motion.button>
@@ -731,6 +787,7 @@ const Questions: React.FC<QuestionsProps> = ({
                         variants={buttonVariants}
                         whileHover="hover"
                         whileTap="tap"
+                        disabled={submitting}
                       >
                         No
                       </motion.button>

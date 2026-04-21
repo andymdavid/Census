@@ -1,15 +1,15 @@
 import aiDisruptionForm from './forms/ai-disruption.json';
 import { FormSchemaV0, LoadedFormSchema } from '../types/formSchema';
 
+const toLoadedForm = (form: FormSchemaV0): LoadedFormSchema => {
+  const totalScore = form.questions.reduce((sum, question) => sum + question.weight, 0);
+  return { ...form, totalScore };
+};
+
 export const loadForm = (): LoadedFormSchema => {
   // TODO: Fetch schema from API instead of local JSON once backend wiring is ready.
   const form = aiDisruptionForm as FormSchemaV0;
-  const totalScore = form.questions.reduce((sum, question) => sum + question.weight, 0);
-
-  return {
-    ...form,
-    totalScore
-  };
+  return toLoadedForm(form);
 };
 
 export const loadFormFromApi = async (
@@ -35,9 +35,20 @@ export const loadFormWithFallback = async (
 ): Promise<LoadedFormSchema> => {
   const apiForm = await loadFormFromApi(id, { publicOnly });
   if (apiForm) {
-    const totalScore = apiForm.questions.reduce((sum, question) => sum + question.weight, 0);
-    return { ...apiForm, totalScore };
+    return toLoadedForm(apiForm);
   }
 
   return loadForm();
+};
+
+export const loadRequiredFormFromApi = async (
+  id: string,
+  options?: { publicOnly?: boolean }
+): Promise<LoadedFormSchema | null> => {
+  const apiForm = await loadFormFromApi(id, options);
+  if (!apiForm) {
+    return null;
+  }
+
+  return toLoadedForm(apiForm);
 };
