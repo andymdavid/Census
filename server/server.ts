@@ -5,6 +5,7 @@ import { handleResponsesRoutes } from './routes/responses';
 import { handleLeadsRoutes } from './routes/leads';
 import { handleWorkspacesRoutes } from './routes/workspaces';
 import { handleOrganizationsRoutes } from './routes/organizations';
+import { handleAiRoutes } from './routes/ai';
 
 const publicDir = `${process.cwd()}/public`;
 const buildDir = `${process.cwd()}/build`;
@@ -44,6 +45,10 @@ const handler = async (request: Request, server: Server) => {
 
   if (url.pathname.startsWith('/api/organizations')) {
     return handleOrganizationsRoutes(request);
+  }
+
+  if (url.pathname.startsWith('/api/ai/')) {
+    return handleAiRoutes(request);
   }
 
   if (url.pathname.startsWith('/api/forms')) {
