@@ -22,6 +22,7 @@ interface FunnelStats {
 interface WorkspaceItem {
   id: string;
   name: string;
+  role?: string;
   created_at: number;
   updated_at: number;
 }
@@ -32,7 +33,6 @@ interface OrganizationItem {
   created_at: number;
   updated_at: number;
 }
-
 
 const Forms: React.FC = () => {
   const navigate = useNavigate();
@@ -68,6 +68,21 @@ const Forms: React.FC = () => {
   const [orgName, setOrgName] = useState('');
   const [orgError, setOrgError] = useState<string | null>(null);
   const [deleteFormTarget, setDeleteFormTarget] = useState<FormListItem | null>(null);
+
+  const readApiError = async (response: Response, fallback: string) => {
+    try {
+      const data = (await response.json()) as { error?: string; details?: string[] };
+      if (Array.isArray(data.details) && data.details.length > 0) {
+        return data.details[0];
+      }
+      if (data.error) {
+        return data.error;
+      }
+    } catch {
+      // ignore parse errors and use the fallback message
+    }
+    return fallback;
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -301,7 +316,10 @@ const Forms: React.FC = () => {
     const response = await fetch(`/api/workspaces/${workspaceId}/members`, {
       credentials: 'include',
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      setError(await readApiError(response, 'Unable to load workspace members.'));
+      return;
+    }
     const data = (await response.json()) as {
       members?: Array<{ pubkey: string; role: string; created_at: number }>;
     };
@@ -312,13 +330,17 @@ const Forms: React.FC = () => {
     if (!activeWorkspaceId) return;
     const payload = inviteValue.trim();
     if (!payload) return;
+    setError(null);
     const response = await fetch(`/api/workspaces/${activeWorkspaceId}/invite`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pubkey: payload }),
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      setError(await readApiError(response, 'Unable to invite workspace member.'));
+      return;
+    }
     const data = (await response.json()) as {
       members?: Array<{ pubkey: string; role: string; created_at: number }>;
     };
@@ -362,6 +384,8 @@ const Forms: React.FC = () => {
   const avatarLabel = pubkey ? pubkey.slice(0, 2).toUpperCase() : 'OF';
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   const workspaceLabel = activeWorkspace?.name ?? 'Workspace';
+  const activeWorkspaceRole = activeWorkspace?.role ?? null;
+  const isWorkspaceOwner = activeWorkspaceRole === 'owner';
   const activeOrganization = organizations.find((org) => org.id === activeOrganizationId);
   const organizationLabel = activeOrganization?.name ?? 'Add new organisation';
   const shortNpub = npub ? `${npub.slice(0, 10)}…${npub.slice(-4)}` : null;
@@ -404,13 +428,17 @@ const Forms: React.FC = () => {
     if (!activeWorkspaceId) return;
     const trimmed = workspaceRenameValue.trim();
     if (!trimmed) return;
+    setError(null);
     const response = await fetch(`/api/workspaces/${activeWorkspaceId}`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: trimmed }),
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      setError(await readApiError(response, 'Unable to rename workspace.'));
+      return;
+    }
     setWorkspaces((prev) =>
       prev.map((workspace) =>
         workspace.id === activeWorkspaceId ? { ...workspace, name: trimmed } : workspace
@@ -421,11 +449,15 @@ const Forms: React.FC = () => {
 
   const handleLeaveWorkspace = async () => {
     if (!activeWorkspaceId) return;
+    setError(null);
     const response = await fetch(`/api/workspaces/${activeWorkspaceId}/leave`, {
       method: 'POST',
       credentials: 'include',
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      setError(await readApiError(response, 'Unable to leave workspace.'));
+      return;
+    }
     setWorkspaces((prev) => prev.filter((workspace) => workspace.id !== activeWorkspaceId));
     const nextId = workspaces.find((workspace) => workspace.id !== activeWorkspaceId)?.id ?? null;
     setActiveWorkspace(nextId);
@@ -433,11 +465,15 @@ const Forms: React.FC = () => {
 
   const handleDeleteWorkspace = async () => {
     if (!activeWorkspaceId) return;
+    setError(null);
     const response = await fetch(`/api/workspaces/${activeWorkspaceId}`, {
       method: 'DELETE',
       credentials: 'include',
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      setError(await readApiError(response, 'Unable to delete workspace.'));
+      return;
+    }
     setWorkspaces((prev) => prev.filter((workspace) => workspace.id !== activeWorkspaceId));
     const nextId = workspaces.find((workspace) => workspace.id !== activeWorkspaceId)?.id ?? null;
     setActiveWorkspace(nextId);
@@ -446,11 +482,15 @@ const Forms: React.FC = () => {
 
   const handleDeleteForm = async () => {
     if (!deleteFormTarget) return;
+    setError(null);
     const response = await fetch(`/api/forms/${deleteFormTarget.id}`, {
       method: 'DELETE',
       credentials: 'include',
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      setError(await readApiError(response, 'Unable to delete form.'));
+      return;
+    }
     setForms((prev) => prev.filter((form) => form.id !== deleteFormTarget.id));
     setDeleteFormTarget(null);
   };
@@ -459,7 +499,9 @@ const Forms: React.FC = () => {
     <div className="min-h-screen bg-white flex flex-col">
       <header className="h-14 px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="text-[20px] text-gray-800 of-logo-text">Census</div>
+          <Link to="/forms" className="text-[20px] text-gray-800 of-logo-text hover:text-gray-600 transition">
+            Census
+          </Link>
         </div>
         <div className="flex items-center gap-3">
           <DropdownMenu.Root>
@@ -529,7 +571,6 @@ const Forms: React.FC = () => {
               >
                 + Create a new form
               </button>
-
               <div className="space-y-4 mt-4">
                 <div className="flex items-center justify-between text-sm text-gray-600">
                   <div className="flex items-center gap-2">
@@ -583,18 +624,23 @@ const Forms: React.FC = () => {
                               onClick={async () => {
                                 const trimmed = workspaceName.trim();
                                 if (!trimmed || !activeOrganizationId) return;
+                                setError(null);
                                 const response = await fetch('/api/workspaces', {
                                   method: 'POST',
                                   credentials: 'include',
                                   headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify({ name: trimmed, orgId: activeOrganizationId }),
                                 });
-                                if (!response.ok) return;
+                                if (!response.ok) {
+                                  setError(await readApiError(response, 'Unable to create workspace.'));
+                                  return;
+                                }
                                 const data = (await response.json()) as { id?: string };
                                 if (data.id) {
                                   const newWorkspace: WorkspaceItem = {
                                     id: data.id,
                                     name: trimmed,
+                                    role: 'owner',
                                     created_at: Date.now(),
                                     updated_at: Date.now(),
                                   };
@@ -723,8 +769,13 @@ const Forms: React.FC = () => {
                           className="w-40 rounded-xl bg-white shadow-xl border border-gray-100 overflow-hidden"
                         >
                           <DropdownMenu.Item
-                            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                            className={`px-4 py-2 text-sm ${
+                              isWorkspaceOwner
+                                ? 'text-gray-700 hover:bg-gray-100 cursor-pointer'
+                                : 'text-gray-400 cursor-not-allowed'
+                            }`}
                             onSelect={() => {
+                              if (!isWorkspaceOwner) return;
                               setWorkspaceRenameValue(activeWorkspace?.name ?? '');
                               setRenameWorkspaceOpen(true);
                             }}
@@ -737,24 +788,28 @@ const Forms: React.FC = () => {
                           >
                             Leave
                           </DropdownMenu.Item>
-                          <DropdownMenu.Item
-                            className="px-4 py-2 text-sm text-red-600 hover:bg-gray-100 cursor-pointer"
-                            onSelect={() => setDeleteWorkspaceOpen(true)}
-                          >
-                            Delete
-                          </DropdownMenu.Item>
+                          {isWorkspaceOwner && (
+                            <DropdownMenu.Item
+                              className="px-4 py-2 text-sm text-red-600 hover:bg-gray-100 cursor-pointer"
+                              onSelect={() => setDeleteWorkspaceOpen(true)}
+                            >
+                              Delete
+                            </DropdownMenu.Item>
+                          )}
                         </DropdownMenu.Content>
                       </DropdownMenu.Portal>
                     </DropdownMenu.Root>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button
-                      className="h-[30px] text-xs text-gray-600 border border-gray-200 rounded-xl px-3 inline-flex items-center gap-2 bg-white hover:bg-[#ededee] transition"
-                      onClick={() => setInviteOpen(true)}
-                    >
-                      <UserPlus className="h-3.5 w-3.5 text-gray-500" />
-                      Invite
-                    </button>
+                    {isWorkspaceOwner && (
+                      <button
+                        className="h-[30px] text-xs text-gray-600 border border-gray-200 rounded-xl px-3 inline-flex items-center gap-2 bg-white hover:bg-[#ededee] transition"
+                        onClick={() => setInviteOpen(true)}
+                      >
+                        <UserPlus className="h-3.5 w-3.5 text-gray-500" />
+                        Invite
+                      </button>
+                    )}
                     <DropdownMenu.Root>
                       <DropdownMenu.Trigger asChild>
                         <button className="h-[30px] text-xs text-gray-600 border border-gray-200 rounded-xl px-3 inline-flex items-center gap-2 bg-white hover:bg-[#ededee] transition">
