@@ -43,6 +43,8 @@ export interface FormQuestionSettings {
   otherOption?: boolean;
   verticalAlignment?: 'left' | 'center';
   mediaType?: 'image' | 'video';
+  mediaSize?: 'xsmall' | 'small' | 'medium' | 'large';
+  mediaPosition?: 'above' | 'below';
   showTimeToComplete?: boolean;
   showSubmissionCount?: boolean;
   buttonLabel?: string;
