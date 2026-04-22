@@ -370,8 +370,58 @@ const Questions: React.FC<QuestionsProps> = ({
         )}
         <div className={`typeform-content${previewMode ? ' typeform-content-preview' : ''}`}>
           <div className="typeform-card">
+            {welcomeScreen.settings?.mediaUrl && welcomeScreen.settings?.mediaPosition === 'above' && (
+              <div className="mb-6 flex justify-center">
+                {welcomeScreen.settings.mediaType === 'video' ? (
+                  <video
+                    src={welcomeScreen.settings.mediaUrl}
+                    className={`rounded-xl shadow-sm ${
+                      welcomeScreen.settings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                      welcomeScreen.settings.mediaSize === 'small' ? 'max-w-[200px]' :
+                      welcomeScreen.settings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                    }`}
+                    controls
+                  />
+                ) : (
+                  <img
+                    src={welcomeScreen.settings.mediaUrl}
+                    alt="Welcome media"
+                    className={`rounded-xl shadow-sm ${
+                      welcomeScreen.settings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                      welcomeScreen.settings.mediaSize === 'small' ? 'max-w-[200px]' :
+                      welcomeScreen.settings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                    }`}
+                  />
+                )}
+              </div>
+            )}
             <h2 className="typeform-heading">{welcomeScreen.text}</h2>
             {form.description && <p className="typeform-text">{form.description}</p>}
+            {welcomeScreen.settings?.mediaUrl && welcomeScreen.settings?.mediaPosition !== 'above' && (
+              <div className="my-6 flex justify-center">
+                {welcomeScreen.settings.mediaType === 'video' ? (
+                  <video
+                    src={welcomeScreen.settings.mediaUrl}
+                    className={`rounded-xl shadow-sm ${
+                      welcomeScreen.settings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                      welcomeScreen.settings.mediaSize === 'small' ? 'max-w-[200px]' :
+                      welcomeScreen.settings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                    }`}
+                    controls
+                  />
+                ) : (
+                  <img
+                    src={welcomeScreen.settings.mediaUrl}
+                    alt="Welcome media"
+                    className={`rounded-xl shadow-sm ${
+                      welcomeScreen.settings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                      welcomeScreen.settings.mediaSize === 'small' ? 'max-w-[200px]' :
+                      welcomeScreen.settings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                    }`}
+                  />
+                )}
+              </div>
+            )}
             <button
               type="button"
               className="typeform-button"
@@ -409,8 +459,58 @@ const Questions: React.FC<QuestionsProps> = ({
         )}
         <div className={`typeform-content${previewMode ? ' typeform-content-preview' : ''}`}>
           <div className="typeform-card">
+            {endScreen.settings?.mediaUrl && endScreen.settings?.mediaPosition === 'above' && (
+              <div className="mb-6 flex justify-center">
+                {endScreen.settings.mediaType === 'video' ? (
+                  <video
+                    src={endScreen.settings.mediaUrl}
+                    className={`rounded-xl shadow-sm ${
+                      endScreen.settings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                      endScreen.settings.mediaSize === 'small' ? 'max-w-[200px]' :
+                      endScreen.settings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                    }`}
+                    controls
+                  />
+                ) : (
+                  <img
+                    src={endScreen.settings.mediaUrl}
+                    alt="End media"
+                    className={`rounded-xl shadow-sm ${
+                      endScreen.settings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                      endScreen.settings.mediaSize === 'small' ? 'max-w-[200px]' :
+                      endScreen.settings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                    }`}
+                  />
+                )}
+              </div>
+            )}
             <h2 className="typeform-heading">{endScreen.text}</h2>
             {form.description && <p className="typeform-text">{form.description}</p>}
+            {endScreen.settings?.mediaUrl && endScreen.settings?.mediaPosition !== 'above' && (
+              <div className="my-6 flex justify-center">
+                {endScreen.settings.mediaType === 'video' ? (
+                  <video
+                    src={endScreen.settings.mediaUrl}
+                    className={`rounded-xl shadow-sm ${
+                      endScreen.settings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                      endScreen.settings.mediaSize === 'small' ? 'max-w-[200px]' :
+                      endScreen.settings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                    }`}
+                    controls
+                  />
+                ) : (
+                  <img
+                    src={endScreen.settings.mediaUrl}
+                    alt="End media"
+                    className={`rounded-xl shadow-sm ${
+                      endScreen.settings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                      endScreen.settings.mediaSize === 'small' ? 'max-w-[200px]' :
+                      endScreen.settings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                    }`}
+                  />
+                )}
+              </div>
+            )}
             <button
               type="button"
               className="typeform-button"
@@ -514,28 +614,21 @@ const Questions: React.FC<QuestionsProps> = ({
                   <span className="whitespace-nowrap">→</span>
                 </div>
                 <div className="flex flex-col items-start text-left">
-                  {/* Category label - small and above question */}
-                  <motion.div 
-                    variants={itemVariants}
-                    className="typeform-category"
-                  >
-                    {question.category}
-                  </motion.div>
-
-                  {/* Question - larger and more prominent */}
-                  <motion.h2 
-                    variants={itemVariants}
-                    className="typeform-question text-left mx-0"
-                  >
+                  {/* Question title */}
+                  <h2 className="text-2xl font-bold text-gray-800 leading-tight">
                     {question.text}
                     {isRequired && <span className="text-red-500 ml-1">*</span>}
-                  </motion.h2>
+                  </h2>
 
+                  {/* Description - tight to title, space before input */}
                   {question.settings?.description && (
-                    <motion.p variants={itemVariants} className="typeform-text text-left mx-0">
+                    <p className="text-gray-500 italic mt-1">
                       {question.settings.description}
-                    </motion.p>
+                    </p>
                   )}
+
+                  {/* Spacer before input area */}
+                  <div className="h-8" />
 
                   {question.settings?.mediaUrl && (
                     <motion.div variants={itemVariants} className="mb-6">
@@ -609,11 +702,22 @@ const Questions: React.FC<QuestionsProps> = ({
                   onChange={(event) =>
                     setAnswers((prev) => ({ ...prev, [currentQuestionId]: event.target.value }))
                   }
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      if (canContinue) {
+                        void proceedToNext(
+                          { ...answers, [currentQuestionId]: typeof currentAnswer === 'string' ? currentAnswer : '' },
+                          typeof currentAnswer === 'string' ? currentAnswer : ''
+                        );
+                      }
+                    }
+                  }}
                   maxLength={
                     question.settings?.maxCharactersEnabled ? question.settings.maxCharacters ?? undefined : undefined
                   }
-                  className="w-full bg-transparent text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none p-0 leading-[1.1] h-[44px]"
-                  style={{ fontSize: '28px' }}
+                  className="w-full bg-transparent text-gray-800 placeholder:text-blue-300 border-b border-blue-400 focus:outline-none resize-none p-0 leading-[1.2]"
+                  style={{ fontSize: '24px' }}
                   placeholder="Type your answer here..."
                 />
                 <div className="text-sm text-blue-700" style={{ marginTop: '2px' }}>
