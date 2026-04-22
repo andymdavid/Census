@@ -946,8 +946,11 @@ const Builder: React.FC = () => {
       >
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl focus:outline-none">
-            <div className="flex items-start justify-between mb-4">
+          <Dialog.Content
+              className="fixed left-1/2 top-[5vh] w-full max-w-2xl -translate-x-1/2 rounded-2xl bg-white shadow-2xl focus:outline-none flex flex-col overflow-hidden"
+              style={{ maxHeight: '90vh', height: '90vh' }}
+            >
+            <div className="flex items-start justify-between p-6 pb-4 shrink-0">
               <div>
                 <Dialog.Title className="text-lg font-semibold text-gray-900">
                   Generate form with AI
@@ -961,7 +964,7 @@ const Builder: React.FC = () => {
               </Dialog.Close>
             </div>
 
-            <div className="space-y-4">
+            <div className="px-6 pb-6 space-y-4 overflow-y-auto flex-1" style={{ minHeight: 0 }}>
               {aiError && <div className="text-sm text-red-600">{aiError}</div>}
               {aiPreview && (
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
@@ -1326,6 +1329,31 @@ Build a qualification form for inbound B2B leads.
                   </div>
                 ) : isSelectedWelcome || isSelectedEnd ? (
                   <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12">
+                    {selectedSettings.mediaUrl && selectedSettings.mediaPosition === 'above' && (
+                      <div className="mb-6">
+                        {selectedSettings.mediaType === 'video' ? (
+                          <video
+                            src={selectedSettings.mediaUrl}
+                            className={`rounded-xl shadow-sm ${
+                              selectedSettings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                              selectedSettings.mediaSize === 'small' ? 'max-w-[200px]' :
+                              selectedSettings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                            }`}
+                            controls
+                          />
+                        ) : (
+                          <img
+                            src={selectedSettings.mediaUrl}
+                            alt="Welcome media"
+                            className={`rounded-xl shadow-sm ${
+                              selectedSettings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                              selectedSettings.mediaSize === 'small' ? 'max-w-[200px]' :
+                              selectedSettings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                            }`}
+                          />
+                        )}
+                      </div>
+                    )}
                     <input
                       type="text"
                       value={selectedQuestion?.text ?? ''}
@@ -1348,6 +1376,31 @@ Build a qualification form for inbound B2B leads.
                       className="w-full max-w-xl text-lg text-gray-400 text-center bg-transparent focus:outline-none mt-6"
                       placeholder="Description (optional)"
                     />
+                    {selectedSettings.mediaUrl && selectedSettings.mediaPosition !== 'above' && (
+                      <div className="mt-6">
+                        {selectedSettings.mediaType === 'video' ? (
+                          <video
+                            src={selectedSettings.mediaUrl}
+                            className={`rounded-xl shadow-sm ${
+                              selectedSettings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                              selectedSettings.mediaSize === 'small' ? 'max-w-[200px]' :
+                              selectedSettings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                            }`}
+                            controls
+                          />
+                        ) : (
+                          <img
+                            src={selectedSettings.mediaUrl}
+                            alt="Welcome media"
+                            className={`rounded-xl shadow-sm ${
+                              selectedSettings.mediaSize === 'xsmall' ? 'max-w-[100px]' :
+                              selectedSettings.mediaSize === 'small' ? 'max-w-[200px]' :
+                              selectedSettings.mediaSize === 'large' ? 'max-w-[600px]' : 'max-w-[400px]'
+                            }`}
+                          />
+                        )}
+                      </div>
+                    )}
                     <div className="mt-8 flex items-center gap-4">
                       <button
                         type="button"
@@ -1756,15 +1809,72 @@ Build a qualification form for inbound B2B leads.
                           />
                         </div>
 
-                      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                        <div className="text-sm text-gray-600">Image or video</div>
-                        <button
-                          type="button"
-                          className="h-8 w-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-                          onClick={() => mediaInputRef.current?.click()}
-                        >
-                          +
-                        </button>
+                      <div className="pt-2 border-t border-gray-100 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-gray-600">Image or video</div>
+                          <div className="flex items-center gap-2">
+                            {selectedSettings.mediaUrl && (
+                              <button
+                                type="button"
+                                className="text-xs text-red-500 hover:text-red-700"
+                                onClick={() =>
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    mediaUrl: undefined,
+                                    mediaType: undefined,
+                                  }))
+                                }
+                              >
+                                Remove
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="h-8 w-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                              onClick={() => mediaInputRef.current?.click()}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                        {selectedSettings.mediaUrl && (
+                          <>
+                            <div>
+                              <label className="of-label">Size</label>
+                              <select
+                                value={selectedSettings.mediaSize ?? 'medium'}
+                                onChange={(event) =>
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    mediaSize: event.target.value as 'xsmall' | 'small' | 'medium' | 'large',
+                                  }))
+                                }
+                                className="of-input"
+                              >
+                                <option value="xsmall">Extra Small</option>
+                                <option value="small">Small</option>
+                                <option value="medium">Medium</option>
+                                <option value="large">Large</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="of-label">Position</label>
+                              <select
+                                value={selectedSettings.mediaPosition ?? 'below'}
+                                onChange={(event) =>
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    mediaPosition: event.target.value as 'above' | 'below',
+                                  }))
+                                }
+                                className="of-input"
+                              >
+                                <option value="above">Above title</option>
+                                <option value="below">Below description</option>
+                              </select>
+                            </div>
+                          </>
+                        )}
                       </div>
                       </div>
                     ) : isSelectedGroup ? (
