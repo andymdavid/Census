@@ -3,7 +3,7 @@ import { parseAndValidateAiFormSpec } from '../../shared/aiFormSpec';
 import { compileAiFormSpec } from '../../shared/aiFormCompiler';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const DEFAULT_MODEL = 'openai/gpt-4.1-mini';
+const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 
 interface OpenRouterMessage {
   role: 'system' | 'user' | 'assistant';
@@ -24,7 +24,7 @@ interface GeneratedAiFormResult {
 
 const AI_FORM_SPEC_JSON_SCHEMA = {
   name: 'ai_form_spec',
-  strict: true,
+  strict: false,
   schema: {
     type: 'object',
     additionalProperties: false,
@@ -147,7 +147,8 @@ Rules:
 - Use weight 0 for welcome, end, and group steps.
 - Use assumptions to record any interpretation choices or unresolved ambiguity.
 - Do not invent unsupported fields.
-- Make the structure practical for a business form or assessment, not academic.`;
+- Make the structure practical for a business form or assessment, not academic.
+- ALWAYS include a "results" array with at least one result band. Each result must have a "label" and "description". Use minScore/maxScore for scored assessments, or omit them for simple forms.`;
 
 const buildRepairPrompt = (brief: string, error: string) => `The previous AiFormSpec attempt did not validate or compile.
 
@@ -180,6 +181,7 @@ const parseOpenRouterResponse = async (response: Response) => {
   };
 
   if (!response.ok) {
+    console.error('OpenRouter error:', JSON.stringify(data, null, 2));
     throw new Error(data.error?.message ?? `OpenRouter request failed (${response.status}).`);
   }
 
@@ -258,8 +260,10 @@ export const generateAiFormSpecFromBrief = async (input: GenerateAiFormSpecInput
           ];
 
     const { parsed, model: resolvedModel } = await requestAiFormSpec(apiKey, model, messages);
+    console.log('AI response parsed:', JSON.stringify(parsed, null, 2));
     const { spec, errors } = parseAndValidateAiFormSpec(parsed);
     if (!spec || errors.length > 0) {
+      console.error('Validation errors:', errors);
       lastError = errors[0] ?? 'OpenRouter returned an invalid AiFormSpec.';
       repaired = attempt > 0;
       continue;
