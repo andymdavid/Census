@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { loadForm } from '../data/loadForm';
 import type { LoadedFormSchema } from '../types/formSchema';
+import { isScoringEnabled } from '../../shared/formFlow';
 
 const defaultForm = loadForm();
 
@@ -23,6 +24,7 @@ const Results: React.FC<ResultsProps> = () => {
   const form = (location.state?.form as LoadedFormSchema | undefined) ?? defaultForm;
   const formId = location.state?.formId as string | undefined;
   const responseId = location.state?.responseId as string | undefined;
+  const scoringEnabled = isScoringEnabled(form);
   const logoUrl = form.theme?.logoUrl;
   const themeStyles = form.theme
     ? ({
@@ -117,7 +119,7 @@ const Results: React.FC<ResultsProps> = () => {
     return match ?? form.results[form.results.length - 1];
   };
 
-  const result = getResult();
+  const result = scoringEnabled ? getResult() : form.results[0];
 
   // Animation variants
   const pageVariants = {
@@ -215,34 +217,42 @@ const Results: React.FC<ResultsProps> = () => {
           <motion.div
             className="flex flex-col items-center w-full"
           >
-            <motion.div 
-              variants={itemVariants}
-              className="text-sm text-gray-400 mb-4 font-medium"
-            >
-              Your Assessment Results
-            </motion.div>
+            {scoringEnabled && (
+              <motion.div 
+                variants={itemVariants}
+                className="text-sm text-gray-400 mb-4 font-medium"
+              >
+                Your Assessment Results
+              </motion.div>
+            )}
             
-            <motion.h2 
-              variants={itemVariants}
-              className="text-3xl font-bold text-gray-800 mb-2 text-center"
-            >
-              {result.label}
-            </motion.h2>
+            {result && (
+              <motion.h2 
+                variants={itemVariants}
+                className="text-3xl font-bold text-gray-800 mb-2 text-center"
+              >
+                {result.label}
+              </motion.h2>
+            )}
             
-            <motion.div 
-              variants={itemVariants}
-              className="flex items-center justify-center mb-6"
-            >
-              <div className="text-4xl font-bold text-primary">{score}</div>
-              <div className="text-gray-500 ml-2">/ {form.totalScore}</div>
-            </motion.div>
+            {scoringEnabled && (
+              <motion.div 
+                variants={itemVariants}
+                className="flex items-center justify-center mb-6"
+              >
+                <div className="text-4xl font-bold text-primary">{score}</div>
+                <div className="text-gray-500 ml-2">/ {form.totalScore}</div>
+              </motion.div>
+            )}
             
-            <motion.p 
-              variants={itemVariants}
-              className="text-gray-600 mb-8 text-center max-w-2xl"
-            >
-              {result.description}
-            </motion.p>
+            {result && (
+              <motion.p 
+                variants={itemVariants}
+                className="text-gray-600 mb-8 text-center max-w-2xl"
+              >
+                {result.description}
+              </motion.p>
+            )}
             
             <motion.form 
               variants={itemVariants}

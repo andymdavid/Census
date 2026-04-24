@@ -34,9 +34,10 @@ export interface FormQuestion {
 }
 
 export interface FormQuestionSettings {
-  kind?: 'welcome' | 'end' | 'group' | 'yesno' | 'multiple' | 'short' | 'long' | 'email' | 'number' | 'date';
+  kind?: 'welcome' | 'end' | 'group' | 'details' | 'yesno' | 'multiple' | 'short' | 'long' | 'email' | 'number' | 'date';
   answerType?: 'multiple' | 'yesno' | 'short' | 'long' | 'email' | 'number' | 'date';
   choices?: string[];
+  choiceKeyStyle?: 'letters' | 'numbers';
   description?: string;
   required?: boolean;
   multipleSelection?: boolean;
@@ -47,16 +48,19 @@ export interface FormQuestionSettings {
   mediaPosition?: 'above' | 'below';
   showTimeToComplete?: boolean;
   showSubmissionCount?: boolean;
+  footerText?: string;
   buttonLabel?: string;
   mediaUrl?: string;
   maxCharactersEnabled?: boolean;
   maxCharacters?: number;
+  longTextFormat?: 'paragraph' | 'steps' | 'numbered';
   dateFormat?: 'MMDDYYYY' | 'DDMMYYYY' | 'YYYYMMDD';
   dateSeparator?: '/' | '-' | '.';
   minNumberEnabled?: boolean;
   minNumber?: number;
   maxNumberEnabled?: boolean;
   maxNumber?: number;
+  numberUnitChoices?: string[];
 }
 
 export interface FormResultThreshold {
@@ -74,12 +78,28 @@ export interface FormTheme {
   logoUrl?: string;
 }
 
+export interface FormRepeatLoop {
+  id: string;
+  label: string;
+  pluralLabel?: string;
+  startQuestionId: number;
+  endQuestionId: number;
+  exitQuestionId?: number;
+  titleQuestionId?: number;
+  addAnotherLabel?: string;
+  continueLabel?: string;
+  minRepeats?: number;
+  maxRepeats?: number;
+}
+
 export interface FormSchemaV0 {
   version: 'v0';
   id: string;
   title: string;
   description?: string;
+  scoringEnabled?: boolean;
   questions: FormQuestion[];
+  repeatLoops?: FormRepeatLoop[];
   results: FormResultThreshold[];
   theme?: FormTheme;
 }

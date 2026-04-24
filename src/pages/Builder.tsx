@@ -20,6 +20,7 @@ import {
   ChevronUp,
   ChevronDown as ChevronDownIcon,
   FormInput,
+  GripVertical,
   ListChecks,
   Mail,
   MessageSquareText,
@@ -28,9 +29,17 @@ import {
   Text,
   TextCursorInput,
   ToggleLeft,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { validateFormSchema } from '../../shared/formValidation';
-import { inferQuestionAnswerType } from '../../shared/formFlow';
+import {
+  getTotalScore,
+  inferQuestionAnswerType,
+  isAnswerableQuestion,
+  isFlowQuestion,
+  isScoringEnabled,
+} from '../../shared/formFlow';
 
 const defaultTheme = {
   primaryColor: '#4f46e5',
@@ -45,6 +54,7 @@ const emptySchema: FormSchemaV0 = {
   id: 'new-form',
   title: '',
   description: '',
+  scoringEnabled: false,
   questions: [],
   results: [],
   theme: defaultTheme,
@@ -69,8 +79,9 @@ const createSchema = (overrides: Partial<FormSchemaV0> = {}): FormSchemaV0 => {
     id: 'new-form',
     title: overrides.title ?? 'Untitled Form',
     description: overrides.description ?? '',
+    scoringEnabled: overrides.scoringEnabled ?? false,
     questions: overrides.questions ?? [],
-    results: overrides.results ?? baseResults,
+    results: overrides.results ?? [],
     theme: overrides.theme ?? defaultTheme,
   };
 };
@@ -89,6 +100,7 @@ const templateSchemas = [
     schema: createSchema({
       title: 'Assessment',
       description: 'Answer a few quick questions to get your score.',
+      scoringEnabled: true,
       questions: [
         { id: 1, text: 'Is this a yes/no assessment question?', weight: 10, category: 'Assessment' },
       ],
@@ -114,6 +126,7 @@ const templateSchemas = [
     schema: createSchema({
       title: 'Lead Capture',
       description: 'Collect quick lead details.',
+      scoringEnabled: false,
       questions: [
         { id: 1, text: 'Would you like a demo?', weight: 0, category: 'Lead' },
       ],
@@ -139,6 +152,14 @@ const questionTypeTemplates = [
     category: 'Multiple Choice',
     icon: ListChecks,
     iconClass: 'bg-indigo-100 text-indigo-600',
+  },
+  {
+    key: 'numberedChoice',
+    label: 'Numbered Choice',
+    questionText: 'Numbered choice question',
+    category: 'Multiple Choice',
+    icon: ListChecks,
+    iconClass: 'bg-cyan-100 text-cyan-700',
   },
   {
     key: 'long',
@@ -196,6 +217,14 @@ const questionTypeTemplates = [
     icon: FormInput,
     iconClass: 'bg-sky-100 text-sky-600',
   },
+  {
+    key: 'details',
+    label: 'Details Screen',
+    questionText: 'Important details',
+    category: 'Details Screen',
+    icon: TextCursorInput,
+    iconClass: 'bg-stone-100 text-stone-700',
+  },
 ];
 
 const getTemplateQuestionKind = (
@@ -204,8 +233,9 @@ const getTemplateQuestionKind = (
   if (key === 'welcome') return 'welcome';
   if (key === 'end') return 'end';
   if (key === 'group') return 'group';
+  if (key === 'details') return 'details';
   if (key === 'yesno') return 'yesno';
-  if (key === 'mc') return 'multiple';
+  if (key === 'mc' || key === 'numberedChoice') return 'multiple';
   if (key === 'long') return 'long';
   if (key === 'email') return 'email';
   if (key === 'number') return 'number';
@@ -216,7 +246,7 @@ const getTemplateQuestionKind = (
 const getTemplateAnswerType = (
   key: (typeof questionTypeTemplates)[number]['key']
 ): NonNullable<FormQuestionSettings['answerType']> => {
-  if (key === 'mc') return 'multiple';
+  if (key === 'mc' || key === 'numberedChoice') return 'multiple';
   if (key === 'yesno') return 'yesno';
   if (key === 'long') return 'long';
   if (key === 'email') return 'email';
@@ -225,8 +255,119 @@ const getTemplateAnswerType = (
   return 'short';
 };
 
-const getTotalScore = (schema: FormSchemaV0) =>
-  schema.questions.reduce((sum, question) => sum + question.weight, 0);
+const getCategoryForAnswerType = (
+  answerType: NonNullable<FormQuestionSettings['answerType']>
+) => {
+  if (answerType === 'multiple') return 'Multiple Choice';
+  if (answerType === 'yesno') return 'Yes/No';
+  if (answerType === 'long' || answerType === 'short') return 'Text';
+  if (answerType === 'email') return 'Email';
+  if (answerType === 'number') return 'Number';
+  if (answerType === 'date') return 'Date';
+  return 'General';
+};
+
+const answerTypeCategories = new Set([
+  'General',
+  'Multiple Choice',
+  'Yes/No',
+  'Text',
+  'Short Text',
+  'Email',
+  'Number',
+  'Date',
+]);
+
+const normalizeSchemaQuestionCategories = (schema: FormSchemaV0): FormSchemaV0 => ({
+  ...schema,
+  questions: schema.questions.map((question) => {
+    if (
+      question.settings?.kind === 'welcome' ||
+      question.settings?.kind === 'end' ||
+      question.settings?.kind === 'group' ||
+      question.settings?.kind === 'details' ||
+      !answerTypeCategories.has(question.category)
+    ) {
+      return question;
+    }
+
+    const answerType = inferQuestionAnswerType(question);
+    return {
+      ...question,
+      category: getCategoryForAnswerType(answerType),
+    };
+  }),
+});
+
+const getQuestionDisplayLabel = (question: FormQuestion, index: number) => {
+  const displayNumber = index + 1;
+  if (question.category === 'Welcome Screen') return `${displayNumber}. Start screen`;
+  if (question.category === 'End Screen') return `${displayNumber}. End screen`;
+  if (question.settings?.kind === 'details' || question.category === 'Details Screen') {
+    return `${displayNumber}. Details screen`;
+  }
+  if (question.settings?.kind === 'group' || question.category === 'Question Group') {
+    return `${displayNumber}. Section screen`;
+  }
+  return `${displayNumber}. Question`;
+};
+
+const getNumberScaleOptions = (settings: FormQuestionSettings) => {
+  if (!settings.minNumberEnabled || !settings.maxNumberEnabled) return [];
+  const min = settings.minNumber;
+  const max = settings.maxNumber;
+  if (
+    !Number.isInteger(min) ||
+    !Number.isInteger(max) ||
+    min === undefined ||
+    max === undefined ||
+    min > max ||
+    max - min > 19
+  ) {
+    return [];
+  }
+  return Array.from({ length: max - min + 1 }, (_, index) => min + index);
+};
+
+const getNumberScaleLabel = (
+  settings: FormQuestionSettings,
+  option: number,
+  index: number
+) => {
+  const label = settings.choices?.[index]?.trim();
+  return label || String(option);
+};
+
+const getNumberUnitChoices = (settings: FormQuestionSettings) => {
+  return (settings.numberUnitChoices ?? []).map((unit) => unit.trim()).filter(Boolean);
+};
+
+const getChoiceKey = (
+  index: number,
+  style: FormQuestionSettings['choiceKeyStyle'] = 'letters'
+) => {
+  return style === 'numbers' ? String(index + 1) : String.fromCharCode(65 + index);
+};
+
+const getBranchSelectionOptions = (question: FormQuestion) => {
+  const answerType = inferQuestionAnswerType(question);
+  if (answerType === 'multiple') {
+    return [
+      ...(question.settings?.choices ?? []),
+      ...(question.settings?.otherOption ? ['Other'] : []),
+    ];
+  }
+
+  if (answerType === 'number') {
+    return getNumberScaleOptions(question.settings ?? {}).map(String);
+  }
+
+  return [];
+};
+
+const getBranchSelectionOperator = (question: FormQuestion): FormBranchOperator => {
+  return question.settings?.multipleSelection ? 'contains' : 'equals';
+};
 
 const getNextId = (schema: FormSchemaV0, id: number) => {
   const index = schema.questions.findIndex((question) => question.id === id);
@@ -251,6 +392,55 @@ interface AiPreviewData {
     theme?: Record<string, string>;
   };
 }
+
+interface ResponseReviewListItem {
+  id: string;
+  submittedAt: number;
+  score: number;
+  completed: boolean;
+  answerCount: number;
+  submitterName: string;
+  submitterEmail: string | null;
+}
+
+interface ResponseReviewDetail {
+  id: string;
+  submittedAt: number;
+  score: number;
+  completed: boolean;
+  submitterName: string;
+  submitterEmail: string | null;
+  sections: Array<{
+    title: string;
+    answers: Array<{
+      questionId: number;
+      question: string;
+      answer: string;
+    }>;
+  }>;
+}
+
+type ResponseStatusFilter = 'completed' | 'in_progress' | 'all';
+
+const areResponseReviewRowsEqual = (
+  left: ResponseReviewListItem[],
+  right: ResponseReviewListItem[]
+) => {
+  if (left.length !== right.length) return false;
+  return left.every((item, index) => {
+    const other = right[index];
+    return (
+      other !== undefined &&
+      item.id === other.id &&
+      item.submittedAt === other.submittedAt &&
+      item.score === other.score &&
+      item.completed === other.completed &&
+      item.answerCount === other.answerCount &&
+      item.submitterName === other.submitterName &&
+      item.submitterEmail === other.submitterEmail
+    );
+  });
+};
 
 const getBranchOperatorOptions = (question: FormQuestion) => {
   const answerType = inferQuestionAnswerType(question);
@@ -300,6 +490,17 @@ const createDefaultBranchCondition = (question: FormQuestion, nextId: number): F
     return { when: { answer: true }, next: nextId };
   }
 
+  const selectionOptions = getBranchSelectionOptions(question);
+  if (selectionOptions.length > 0) {
+    return {
+      when: {
+        operator: getBranchSelectionOperator(question),
+        value: selectionOptions[0],
+      },
+      next: nextId,
+    };
+  }
+
   if (answerType === 'number') {
     return { when: { operator: 'equals', value: 0 }, next: nextId };
   }
@@ -330,11 +531,12 @@ const Builder: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
   const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
+  const [draggedQuestionId, setDraggedQuestionId] = useState<number | null>(null);
+  const [dragOverQuestionId, setDragOverQuestionId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<
-    'form' | 'question' | 'branching' | 'theme' | 'results' | 'share'
+    'form' | 'question' | 'branching' | 'loops' | 'theme' | 'results' | 'responses' | 'share'
   >('question');
   const [previewStep, setPreviewStep] = useState<'intro' | 'questions'>('intro');
-  const [showShare, setShowShare] = useState(false);
   const [creating, setCreating] = useState(false);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
   const [aiBrief, setAiBrief] = useState('');
@@ -368,6 +570,7 @@ const Builder: React.FC = () => {
   const embedScriptFullscreen = `<script src="${origin}/embed.js"></script>\n<div data-census data-form-id="${id ?? ':id'}" data-mode="fullscreen"></div>`;
 
   const validationErrors = useMemo(() => validateFormSchema(schema), [schema]);
+  const scoringEnabled = isScoringEnabled(schema);
   const previewForm: LoadedFormSchema = useMemo(
     () => ({ ...schema, totalScore: getTotalScore(schema) }),
     [schema]
@@ -383,15 +586,131 @@ const Builder: React.FC = () => {
   const questionTitleMeasureRef = useRef<HTMLSpanElement | null>(null);
   const questionTitleContainerRef = useRef<HTMLDivElement | null>(null);
   const [questionTitleWidth, setQuestionTitleWidth] = useState<number | null>(null);
+  const [responseRows, setResponseRows] = useState<ResponseReviewListItem[]>([]);
+  const [selectedResponseId, setSelectedResponseId] = useState<string | null>(null);
+  const [selectedResponseDetail, setSelectedResponseDetail] = useState<ResponseReviewDetail | null>(null);
+  const [responsesLoading, setResponsesLoading] = useState(false);
+  const [responsesError, setResponsesError] = useState<string | null>(null);
+  const [responsesRefreshKey, setResponsesRefreshKey] = useState(0);
+  const [deletingResponseId, setDeletingResponseId] = useState<string | null>(null);
+  const [responseStatusFilter, setResponseStatusFilter] = useState<ResponseStatusFilter>('all');
 
   const selectedQuestion = schema.questions.find((question) => question.id === selectedQuestionId);
-  const questionOptions = schema.questions.map((question) => question.id);
+  const questionOptions = schema.questions.map((question, index) => ({
+    id: question.id,
+    label: getQuestionDisplayLabel(question, index),
+  }));
   const resultOptions = schema.results;
   const isSelectedWelcome = selectedQuestion?.category === 'Welcome Screen';
   const isSelectedEnd = selectedQuestion?.category === 'End Screen';
   const isSelectedGroup = selectedQuestion?.category === 'Question Group';
+  const isSelectedDetails = selectedQuestion?.settings?.kind === 'details' || selectedQuestion?.category === 'Details Screen';
+  const flowQuestions = schema.questions.filter(isFlowQuestion);
+  const selectedQuestionPosition = selectedQuestion
+    ? flowQuestions.findIndex((question) => question.id === selectedQuestion.id) + 1
+    : null;
   const selectedSettings = selectedQuestion?.settings ?? {};
   const inferredAnswerType = selectedQuestion ? inferQuestionAnswerType(selectedQuestion) : 'short';
+  const groupQuestions = schema.questions.filter((question) => question.category === 'Question Group');
+  const selectedGroupIndex = isSelectedGroup && selectedQuestion
+    ? groupQuestions.findIndex((question) => question.id === selectedQuestion.id)
+    : -1;
+  const selectedQuestionOrderIndex = selectedQuestion
+    ? schema.questions.findIndex((question) => question.id === selectedQuestion.id)
+    : -1;
+  const nextGroupBoundaryIndex =
+    selectedQuestionOrderIndex === -1
+      ? -1
+      : schema.questions.findIndex(
+          (question, index) =>
+            index > selectedQuestionOrderIndex &&
+            (question.category === 'Question Group' || question.category === 'End Screen')
+        );
+  const selectedGroupQuestionCount =
+    selectedQuestionOrderIndex === -1
+      ? 0
+      : schema.questions
+          .slice(
+            selectedQuestionOrderIndex + 1,
+            nextGroupBoundaryIndex === -1 ? undefined : nextGroupBoundaryIndex
+          )
+          .filter(isAnswerableQuestion).length;
+  const selectedGroupTitle =
+    isSelectedGroup && selectedQuestion
+      ? selectedQuestion.text.replace(/^section\s+\d+\s*:\s*/i, '').trim() || selectedQuestion.text
+      : selectedQuestion?.text ?? '';
+  const selectedGroupDescription = selectedSettings.description?.trim() ?? '';
+  const selectedGroupDescriptionMatchesTitle =
+    selectedGroupDescription.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() ===
+    selectedGroupTitle.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const selectedGroupSummary =
+    isSelectedGroup && selectedGroupDescription && !selectedGroupDescriptionMatchesTitle
+      ? selectedGroupDescription
+      : selectedGroupQuestionCount > 0
+        ? `The next ${selectedGroupQuestionCount} ${
+            selectedGroupQuestionCount === 1 ? 'question covers' : 'questions cover'
+          } this topic area and the work captured in this part of the form.`
+        : 'This section introduces the next part of the form.';
+  const selectedGroupButtonLabel =
+    selectedSettings.buttonLabel?.trim() &&
+    selectedSettings.buttonLabel.trim().toLowerCase() !== 'continue'
+      ? selectedSettings.buttonLabel
+      : 'Start section';
+  const selectedEndFooterText =
+    isSelectedEnd && Object.prototype.hasOwnProperty.call(selectedSettings, 'footerText')
+      ? selectedSettings.footerText ?? ''
+      : 'Thanks for taking part';
+
+  useEffect(() => {
+    if (!selectedQuestion?.branching) return;
+
+    const selectionOptions = getBranchSelectionOptions(selectedQuestion);
+    if (selectionOptions.length === 0) return;
+
+    const selectionOperator = getBranchSelectionOperator(selectedQuestion);
+    const nextConditions = (selectedQuestion.branching.conditions ?? []).map((condition) => {
+      const currentValue = String(condition.when.value ?? '');
+      const nextValue = selectionOptions.includes(currentValue)
+        ? currentValue
+        : selectionOptions[0];
+      if (condition.when.operator === selectionOperator && condition.when.value === nextValue) {
+        return condition;
+      }
+      return {
+        ...condition,
+        when: {
+          operator: selectionOperator,
+          value: nextValue,
+        },
+      };
+    });
+
+    const changed = nextConditions.some(
+      (condition, index) => condition !== selectedQuestion.branching?.conditions?.[index]
+    );
+    if (!changed) return;
+
+    setSchema((prev) => ({
+      ...prev,
+      questions: prev.questions.map((question) =>
+        question.id === selectedQuestion.id
+          ? {
+              ...question,
+              branching: {
+                ...(question.branching ?? {}),
+                conditions: nextConditions,
+              },
+            }
+          : question
+      ),
+    }));
+  }, [selectedQuestion]);
+
+  useEffect(() => {
+    if (!scoringEnabled && activeTab === 'results') {
+      setActiveTab('question');
+    }
+  }, [activeTab, scoringEnabled]);
 
   useEffect(() => {
     let isMounted = true;
@@ -417,6 +736,7 @@ const Builder: React.FC = () => {
           setSchema({
             ...loadedSchema,
             id: id,
+            scoringEnabled: isScoringEnabled(loadedSchema),
             theme: {
               ...defaultTheme,
               ...(loadedSchema.theme ?? {}),
@@ -444,6 +764,139 @@ const Builder: React.FC = () => {
       setTemplateModalOpen(true);
     }
   }, [isNew]);
+
+  useEffect(() => {
+    let isMounted = true;
+    let intervalId: number | null = null;
+
+    const loadResponses = async (background = false) => {
+      if (activeTab !== 'responses' || isNew || !id) {
+        return;
+      }
+
+      if (!background) {
+        setResponsesLoading(true);
+        setResponsesError(null);
+      }
+      try {
+        const response = await fetch(
+          `/api/forms/${id}/responses/review?status=${responseStatusFilter}`
+        );
+        if (!response.ok) {
+          throw new Error(await readApiError(response, 'Failed to load responses.'));
+        }
+        const data = (await response.json()) as { responses?: ResponseReviewListItem[] };
+        if (isMounted) {
+          const nextRows = data.responses ?? [];
+          setResponseRows((current) =>
+            areResponseReviewRowsEqual(current, nextRows) ? current : nextRows
+          );
+          setSelectedResponseId((current) =>
+            current && nextRows.some((item) => item.id === current)
+              ? current
+              : nextRows[0]?.id ?? null
+          );
+          if (background) {
+            setResponsesError(null);
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          if (!background) {
+            setResponsesError(err instanceof Error ? err.message : 'Unknown error');
+            setResponseRows([]);
+            setSelectedResponseId(null);
+          }
+        }
+      } finally {
+        if (isMounted && !background) {
+          setResponsesLoading(false);
+        }
+      }
+    };
+
+    void loadResponses();
+
+    if (activeTab === 'responses' && !isNew && id) {
+      intervalId = window.setInterval(() => {
+        void loadResponses(true);
+      }, 5000);
+    }
+
+    return () => {
+      isMounted = false;
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [activeTab, id, isNew, responseStatusFilter, responsesRefreshKey]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadResponseDetail = async () => {
+      if (activeTab !== 'responses' || isNew || !id || !selectedResponseId) {
+        setSelectedResponseDetail(null);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/forms/${id}/responses/review/${selectedResponseId}`);
+        if (!response.ok) {
+          throw new Error(await readApiError(response, 'Failed to load response detail.'));
+        }
+        const data = (await response.json()) as { response?: ResponseReviewDetail };
+        if (isMounted) {
+          setSelectedResponseDetail(data.response ?? null);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setResponsesError(err instanceof Error ? err.message : 'Unknown error');
+          setSelectedResponseDetail(null);
+        }
+      }
+    };
+
+    void loadResponseDetail();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, id, isNew, selectedResponseId]);
+
+  const handleDeleteResponse = async (response: ResponseReviewListItem) => {
+    if (!id || deletingResponseId) return;
+
+    const confirmed = window.confirm(
+      `Delete the response from ${response.submitterName}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingResponseId(response.id);
+    setResponsesError(null);
+    try {
+      const result = await fetch(`/api/forms/${id}/responses/${response.id}`, {
+        method: 'DELETE',
+      });
+      if (!result.ok) {
+        throw new Error(await readApiError(result, 'Failed to delete response.'));
+      }
+
+      setResponseRows((current) => {
+        const nextRows = current.filter((item) => item.id !== response.id);
+        setSelectedResponseId((currentSelected) => {
+          if (currentSelected !== response.id) return currentSelected;
+          return nextRows[0]?.id ?? null;
+        });
+        return nextRows;
+      });
+      setSelectedResponseDetail((current) => (current?.id === response.id ? null : current));
+    } catch (err) {
+      setResponsesError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setDeletingResponseId(null);
+    }
+  };
 
   const createForm = async (schemaInput: FormSchemaV0, formTitle: string) => {
     const params = new URLSearchParams(location.search);
@@ -485,6 +938,8 @@ const Builder: React.FC = () => {
 
   const handleGenerateAiPreview = async () => {
     const brief = aiBrief.trim();
+    const params = new URLSearchParams(location.search);
+    const workspaceId = params.get('workspaceId');
     if (!brief) {
       setAiError('A markdown brief is required.');
       return;
@@ -503,6 +958,7 @@ const Builder: React.FC = () => {
         body: JSON.stringify({
           brief,
           model: aiModel.trim() || undefined,
+          workspaceId: workspaceId || undefined,
         }),
       });
 
@@ -601,8 +1057,27 @@ const Builder: React.FC = () => {
       category: template.category,
       settings: {
         kind: getTemplateQuestionKind(template.key),
-        answerType: getTemplateAnswerType(template.key),
-        buttonLabel: template.key === 'welcome' ? 'Start' : template.key === 'end' ? 'Finish' : undefined,
+        answerType:
+          template.key === 'welcome' || template.key === 'end' || template.key === 'group' || template.key === 'details'
+            ? undefined
+            : getTemplateAnswerType(template.key),
+        description:
+          template.key === 'details'
+            ? 'Add context, instructions, terms, or explanatory text here.'
+            : undefined,
+        minNumberEnabled: template.key === 'number' ? true : undefined,
+        minNumber: template.key === 'number' ? 1 : undefined,
+        maxNumberEnabled: template.key === 'number' ? true : undefined,
+        maxNumber: template.key === 'number' ? 5 : undefined,
+        choiceKeyStyle: template.key === 'numberedChoice' ? 'numbers' : undefined,
+        buttonLabel:
+          template.key === 'welcome'
+            ? 'Start'
+            : template.key === 'end'
+              ? 'Finish'
+              : template.key === 'details' || template.key === 'group'
+                ? 'Continue'
+                : undefined,
       },
     };
     setSchema((prev) => ({ ...prev, questions: [...prev.questions, nextQuestion] }));
@@ -729,6 +1204,19 @@ const Builder: React.FC = () => {
     });
   };
 
+  const moveQuestionById = (questionId: number, toIndex: number) => {
+    setSchema((prev) => {
+      const fromIndex = prev.questions.findIndex((question) => question.id === questionId);
+      if (fromIndex === -1 || fromIndex === toIndex) return prev;
+
+      const nextQuestions = [...prev.questions];
+      const [item] = nextQuestions.splice(fromIndex, 1);
+      const adjustedToIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+      nextQuestions.splice(adjustedToIndex, 0, item);
+      return { ...prev, questions: nextQuestions };
+    });
+  };
+
   const handleSave = async () => {
     setStatus('saving');
     setError(null);
@@ -746,12 +1234,13 @@ const Builder: React.FC = () => {
     }
 
     try {
+      const normalizedSchema = normalizeSchemaQuestionCategories({
+        ...schema,
+        title: title.trim(),
+      });
       const payload = {
         title: title.trim(),
-        schema: {
-          ...schema,
-          title: title.trim(),
-        },
+        schema: normalizedSchema,
       };
 
       if (isNew) {
@@ -787,6 +1276,7 @@ const Builder: React.FC = () => {
         }
       }
 
+      setSchema(normalizedSchema);
       setStatus('success');
     } catch (err) {
       setStatus('error');
@@ -799,13 +1289,47 @@ const Builder: React.FC = () => {
     setStatus('saving');
     setError(null);
 
+    if (!title.trim()) {
+      setStatus('error');
+      setError('Title is required.');
+      return;
+    }
+
+    if (validationErrors.length > 0) {
+      setStatus('error');
+      setError('Fix schema errors before publishing.');
+      return;
+    }
+
     try {
+      const normalizedSchema = normalizeSchemaQuestionCategories({
+        ...schema,
+        title: title.trim(),
+      });
+      const payload = {
+        title: title.trim(),
+        schema: normalizedSchema,
+      };
+
+      const saveResponse = await fetch(`/api/forms/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!saveResponse.ok) {
+        throw new Error(await readApiError(saveResponse, 'Failed to update form before publishing.'));
+      }
+
       const response = await fetch(`/api/forms/${id}/publish`, {
         method: 'POST',
       });
       if (!response.ok) {
         throw new Error(await readApiError(response, 'Failed to publish form.'));
       }
+      setSchema(normalizedSchema);
       setPublished(true);
       setStatus('success');
     } catch (err) {
@@ -905,6 +1429,32 @@ const Builder: React.FC = () => {
                                   text: template.questionText,
                                   weight: 0,
                                   category: template.category,
+                                  settings: {
+                                    kind: getTemplateQuestionKind(template.key),
+                                    answerType:
+                                      template.key === 'welcome' ||
+                                      template.key === 'end' ||
+                                      template.key === 'group' ||
+                                      template.key === 'details'
+                                        ? undefined
+                                        : getTemplateAnswerType(template.key),
+                                    description:
+                                      template.key === 'details'
+                                        ? 'Add context, instructions, terms, or explanatory text here.'
+                                        : undefined,
+                                    minNumberEnabled: template.key === 'number' ? true : undefined,
+                                    minNumber: template.key === 'number' ? 1 : undefined,
+                                    maxNumberEnabled: template.key === 'number' ? true : undefined,
+                                    maxNumber: template.key === 'number' ? 5 : undefined,
+                                    buttonLabel:
+                                      template.key === 'welcome'
+                                        ? 'Start'
+                                        : template.key === 'end'
+                                          ? 'Finish'
+                                          : template.key === 'details' || template.key === 'group'
+                                            ? 'Continue'
+                                            : undefined,
+                                  },
                                 },
                               ],
                             }),
@@ -1130,11 +1680,19 @@ Build a qualification form for inbound B2B leads.
             <Tabs.Trigger className="of-tabs-trigger" value="branching">
               Branching
             </Tabs.Trigger>
+            <Tabs.Trigger className="of-tabs-trigger" value="loops">
+              Loops
+            </Tabs.Trigger>
             <Tabs.Trigger className="of-tabs-trigger" value="theme">
               Design
             </Tabs.Trigger>
-            <Tabs.Trigger className="of-tabs-trigger" value="results">
-              Results
+            {scoringEnabled && (
+              <Tabs.Trigger className="of-tabs-trigger" value="results">
+                Results
+              </Tabs.Trigger>
+            )}
+            <Tabs.Trigger className="of-tabs-trigger" value="responses">
+              Responses
             </Tabs.Trigger>
             <Tabs.Trigger className="of-tabs-trigger" value="share">
               Share
@@ -1149,16 +1707,9 @@ Build a qualification form for inbound B2B leads.
             type="button"
             onClick={handlePublish}
             className="h-[30px] text-xs text-gray-600 border border-gray-200 rounded-xl px-3 inline-flex items-center bg-white hover:bg-[#ededee] transition disabled:text-gray-400"
-            disabled={isNew || published || status === 'saving'}
+            disabled={isNew || status === 'saving'}
           >
-            {published ? 'Published' : 'Publish'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowShare((prev) => !prev)}
-            className="h-[30px] text-xs text-gray-600 border border-gray-200 rounded-xl px-3 inline-flex items-center bg-white hover:bg-[#ededee] transition"
-          >
-            Share
+            {status === 'saving' ? 'Saving...' : published ? 'Republish' : 'Publish'}
           </button>
           <button
             type="button"
@@ -1170,42 +1721,6 @@ Build a qualification form for inbound B2B leads.
           </button>
         </div>
       </div>
-
-      {showShare && (
-        <div className="border-b border-gray-200 px-6 py-4 bg-gray-50">
-          <div className="max-w-5xl space-y-3">
-            <div className="text-sm text-gray-600">
-              Public link: <span className="font-medium text-gray-800">{publicLink}</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs text-gray-500 mb-1">Embed script (inline)</div>
-                <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
-{embedScript}
-                </pre>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500 mb-1">Embed script (fullscreen)</div>
-                <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
-{embedScriptFullscreen}
-                </pre>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500 mb-1">Inline iframe</div>
-                <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
-{inlineEmbed}
-                </pre>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500 mb-1">Fullscreen iframe</div>
-                <pre className="text-xs bg-gray-900 text-gray-100 rounded-md p-3 overflow-auto">
-{fullscreenEmbed}
-                </pre>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="flex-1 px-6 pb-6 flex min-h-0" style={{ paddingTop: '0px' }}>
         <div className="rounded-2xl overflow-hidden flex-1 flex" style={{ backgroundColor: '#f7f7f8' }}>
@@ -1230,24 +1745,78 @@ Build a qualification form for inbound B2B leads.
             {schema.questions.map((question, index) => {
               const isWelcome = question.category === 'Welcome Screen';
               const isEnd = question.category === 'End Screen';
-              const label = isWelcome ? 'Start screen' : isEnd ? 'End screen' : `Q${question.id}`;
+              const isDetails = question.settings?.kind === 'details' || question.category === 'Details Screen';
+              const displayLabel = getQuestionDisplayLabel(question, index);
+              const label = isWelcome
+                ? 'Start screen'
+                : isEnd
+                  ? 'End screen'
+                  : isDetails
+                    ? 'Details screen'
+                    : `Question`;
               return (
-              <button
+              <div
                 key={question.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   setSelectedQuestionId(question.id);
                   setActiveTab('question');
                 }}
-                className={`w-full text-left rounded-xl px-3 py-2 transition ${
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  setSelectedQuestionId(question.id);
+                  setActiveTab('question');
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (dragOverQuestionId !== question.id) {
+                    setDragOverQuestionId(question.id);
+                  }
+                }}
+                onDragLeave={() => {
+                  setDragOverQuestionId((current) => (current === question.id ? null : current));
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (draggedQuestionId !== null) {
+                    moveQuestionById(draggedQuestionId, index);
+                  }
+                  setDraggedQuestionId(null);
+                  setDragOverQuestionId(null);
+                }}
+                className={`w-full text-left rounded-xl px-3 py-2 transition outline-none ${
                   question.id === selectedQuestionId
                     ? 'bg-[#ededee] text-gray-900'
                     : 'bg-white/70 text-gray-700 hover:bg-white'
+                } ${dragOverQuestionId === question.id ? 'ring-2 ring-blue-300 bg-white' : ''} ${
+                  draggedQuestionId === question.id ? 'opacity-50' : ''
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium truncate">{label}</div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <button
+                      type="button"
+                      className="cursor-grab text-gray-400 hover:text-gray-600 active:cursor-grabbing"
+                      draggable
+                      onClick={(event) => event.stopPropagation()}
+                      onDragStart={(event) => {
+                        setDraggedQuestionId(question.id);
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/plain', String(question.id));
+                      }}
+                      onDragEnd={() => {
+                        setDraggedQuestionId(null);
+                        setDragOverQuestionId(null);
+                      }}
+                      aria-label={`Drag ${label}`}
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </button>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{displayLabel}</div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 text-gray-400">
                     <button
@@ -1305,7 +1874,7 @@ Build a qualification form for inbound B2B leads.
                     </DropdownMenu.Root>
                   </div>
                 </div>
-              </button>
+              </div>
             );
             })}
               </div>
@@ -1320,7 +1889,225 @@ Build a qualification form for inbound B2B leads.
                   color: 'var(--color-text)',
                 }}
               >
-                {schema.questions.length === 0 ? (
+                {activeTab === 'responses' ? (
+                  <div className="h-full overflow-y-auto bg-white text-gray-800">
+                    <div className="mx-auto flex h-full max-w-[1500px] flex-col gap-5 p-6">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-xl font-semibold text-gray-900">Responses</h3>
+                          <p className="mt-1 text-sm text-gray-500">
+                            Review completed and in-progress submissions for this form.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1">
+                            {([
+                              ['completed', 'Completed'],
+                              ['in_progress', 'In progress'],
+                              ['all', 'All'],
+                            ] as Array<[ResponseStatusFilter, string]>).map(([value, label]) => (
+                              <button
+                                key={value}
+                                type="button"
+                                className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                                  responseStatusFilter === value
+                                    ? 'bg-[#2f2b34] text-white'
+                                    : 'text-gray-600 hover:bg-gray-50'
+                                }`}
+                                onClick={() => {
+                                  setResponseStatusFilter(value);
+                                  setSelectedResponseId(null);
+                                  setSelectedResponseDetail(null);
+                                }}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            className="h-9 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50 disabled:text-gray-400"
+                            onClick={() => {
+                              setSelectedResponseId(null);
+                              setSelectedResponseDetail(null);
+                              setResponsesRefreshKey((current) => current + 1);
+                            }}
+                            disabled={responsesLoading || isNew}
+                          >
+                            Refresh
+                          </button>
+                          {!isNew && (
+                            <a
+                              href={`/api/forms/${id}/responses/export`}
+                              className="h-9 rounded-xl bg-[#2f2b34] px-3 text-sm font-medium text-white inline-flex items-center hover:bg-[#27222a]"
+                            >
+                              Download CSV
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {isNew ? (
+                        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center text-sm text-gray-500">
+                          Save the form before reviewing responses.
+                        </div>
+                      ) : responsesError ? (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                          {responsesError}
+                        </div>
+                      ) : responsesLoading ? (
+                        <div className="rounded-2xl border border-gray-200 bg-gray-50 px-5 py-8 text-center text-sm text-gray-500">
+                          Loading responses...
+                        </div>
+                      ) : responseRows.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center">
+                          <div className="text-sm font-medium text-gray-700">
+                            {responseStatusFilter === 'completed'
+                              ? 'No completed responses yet.'
+                              : responseStatusFilter === 'in_progress'
+                                ? 'No in-progress responses yet.'
+                                : 'No responses yet.'}
+                          </div>
+                          <div className="mt-1 text-sm text-gray-500">
+                            {responseStatusFilter === 'completed'
+                              ? 'Published form submissions will appear here once respondents finish the form.'
+                              : responseStatusFilter === 'in_progress'
+                                ? 'Draft responses will appear here as respondents move through the form.'
+                                : 'Responses will appear here as respondents start and complete the form.'}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[minmax(460px,0.95fr)_minmax(0,1.35fr)] xl:grid-cols-[minmax(520px,1fr)_minmax(0,1.45fr)]">
+                          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                            <div className="border-b border-gray-100 px-4 py-3 text-sm font-medium text-gray-700">
+                              Submissions ({responseRows.length})
+                            </div>
+                            <div className="max-h-[640px] overflow-y-auto">
+                              <table className="w-full text-left text-sm">
+                                <thead className="sticky top-0 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                                  <tr>
+                                    <th className="px-4 py-3 font-medium">Submitter</th>
+                                    <th className="w-[132px] px-4 py-3 font-medium">Status</th>
+                                    <th className="px-4 py-3 font-medium">Submitted</th>
+                                    <th className="px-4 py-3 font-medium text-right">Answers</th>
+                                    <th className="px-4 py-3 font-medium text-right">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {responseRows.map((response) => (
+                                    <tr
+                                      key={response.id}
+                                      className={`cursor-pointer hover:bg-gray-50 ${
+                                        selectedResponseId === response.id ? 'bg-[#ededee]' : ''
+                                      }`}
+                                      onClick={() => setSelectedResponseId(response.id)}
+                                    >
+                                      <td className="px-4 py-3">
+                                        <div className="font-medium text-gray-800">{response.submitterName}</div>
+                                        {response.submitterEmail && (
+                                          <div className="text-xs text-gray-500">{response.submitterEmail}</div>
+                                        )}
+                                      </td>
+                                      <td className="w-[132px] px-4 py-3">
+                                        <span
+                                          className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${
+                                            response.completed
+                                              ? 'bg-emerald-100 text-emerald-700'
+                                              : 'bg-amber-100 text-amber-700'
+                                          }`}
+                                        >
+                                          {response.completed ? 'Completed' : 'In progress'}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-gray-600">
+                                        {response.completed ? 'Submitted ' : 'Last saved '}
+                                        {new Date(response.submittedAt).toLocaleString()}
+                                      </td>
+                                      <td className="px-4 py-3 text-right text-gray-600">{response.answerCount}</td>
+                                      <td className="px-4 py-3 text-right">
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 text-gray-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                          aria-label={`Delete response from ${response.submitterName}`}
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            void handleDeleteResponse(response);
+                                          }}
+                                          disabled={deletingResponseId === response.id}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+
+                          <div className="min-h-[420px] overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                            {!selectedResponseDetail ? (
+                              <div className="flex h-full items-center justify-center px-6 text-center text-sm text-gray-500">
+                                Select a response to review its answers.
+                              </div>
+                            ) : (
+                              <div className="h-full overflow-y-auto">
+                                <div className="border-b border-gray-100 px-5 py-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="text-lg font-semibold text-gray-900">
+                                      {selectedResponseDetail.submitterName}
+                                    </div>
+                                    <span
+                                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+                                        selectedResponseDetail.completed
+                                          ? 'bg-emerald-100 text-emerald-700'
+                                          : 'bg-amber-100 text-amber-700'
+                                      }`}
+                                    >
+                                      {selectedResponseDetail.completed ? 'Completed' : 'In progress'}
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 text-sm text-gray-500">
+                                    {selectedResponseDetail.completed ? 'Submitted ' : 'Last saved '}
+                                    {new Date(selectedResponseDetail.submittedAt).toLocaleString()}
+                                  </div>
+                                </div>
+                                <div className="space-y-5 p-4">
+                                  {selectedResponseDetail.sections.length === 0 ? (
+                                    <div className="text-sm text-gray-500">No answers were captured.</div>
+                                  ) : (
+                                    selectedResponseDetail.sections.map((section) => (
+                                      <div key={section.title} className="rounded-xl border border-gray-100">
+                                        <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 text-left text-sm font-semibold text-gray-700">
+                                          {section.title}
+                                        </div>
+                                        <div className="divide-y divide-gray-100 text-left">
+                                          {section.answers.map((answer) => (
+                                            <div
+                                              key={`${section.title}-${answer.questionId}`}
+                                              className="grid gap-3 px-3 py-3 text-left text-sm md:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.2fr)]"
+                                            >
+                                              <div className="text-left align-top font-medium leading-6 text-gray-600">
+                                                {answer.question}
+                                              </div>
+                                              <div className="whitespace-pre-wrap break-words text-left leading-6 text-gray-900">
+                                                {answer.answer}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : schema.questions.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12">
                     <h3 className="text-xl font-semibold mb-2 text-gray-800">No questions yet</h3>
                     <p className="text-sm text-gray-500 max-w-md">
@@ -1417,17 +2204,60 @@ Build a qualification form for inbound B2B leads.
                       <div className="mt-4 text-sm text-gray-600 text-center space-y-1">
                         {selectedSettings.showTimeToComplete && <div>Takes X minutes</div>}
                         {selectedSettings.showSubmissionCount && <div>X people have filled this out</div>}
-                        {isSelectedEnd && !selectedSettings.showTimeToComplete && !selectedSettings.showSubmissionCount && (
-                          <div>Thanks for taking part</div>
+                        {isSelectedEnd &&
+                          !selectedSettings.showTimeToComplete &&
+                          !selectedSettings.showSubmissionCount &&
+                          selectedEndFooterText.trim().length > 0 && (
+                          <div>{selectedEndFooterText}</div>
                         )}
                       </div>
                     )}
                   </div>
+                ) : selectedQuestion && isSelectedDetails ? (
+                  <div className="h-full flex flex-col justify-center px-16 py-12">
+                    <div className="w-full max-w-3xl mx-auto rounded-2xl bg-white/80 border border-gray-100 shadow-sm px-10 py-9">
+                      <input
+                        type="text"
+                        value={selectedQuestion.text}
+                        onChange={(event) => {
+                          updateQuestion(selectedQuestion.id, (question) => ({
+                            ...question,
+                            text: event.target.value,
+                          }));
+                        }}
+                        className="w-full text-3xl font-semibold text-gray-800 bg-transparent focus:outline-none"
+                        placeholder="Details title"
+                      />
+                      <textarea
+                        rows={10}
+                        value={selectedSettings.description ?? ''}
+                        onChange={(event) => {
+                          updateSelectedQuestionSettings((settings) => ({
+                            ...settings,
+                            description: event.target.value,
+                          }));
+                        }}
+                        className="mt-6 w-full resize-y bg-transparent text-base leading-7 text-gray-700 focus:outline-none"
+                        placeholder="Add longer context, instructions, terms, or explanatory text here..."
+                      />
+                      <div className="mt-8 flex items-center gap-4">
+                        <button
+                          type="button"
+                          className="px-6 py-3 rounded-md bg-[#1f3bb3] text-white text-xl font-semibold"
+                        >
+                          {selectedSettings.buttonLabel ?? 'Continue'}
+                        </button>
+                        <span className="text-sm text-gray-600">press Enter ↵</span>
+                      </div>
+                    </div>
+                  </div>
                 ) : selectedQuestion && !isSelectedWelcome && !isSelectedEnd ? (
                   <div className="h-full flex flex-col justify-center px-16 py-12">
-                    <div
+                  <div
                       className={`w-full flex ${
-                        inferredAnswerType === 'long'
+                        isSelectedGroup
+                          ? 'justify-center'
+                          : inferredAnswerType === 'long'
                           ? 'justify-start'
                           : selectedSettings.verticalAlignment === 'center'
                             ? 'justify-center'
@@ -1435,66 +2265,77 @@ Build a qualification form for inbound B2B leads.
                       }`}
                     >
                       <div
-                        className={`w-full grid grid-cols-[36px_1fr] gap-3 ${
-                          inferredAnswerType === 'long' ? 'max-w-none' : 'max-w-[400px]'
+                        className={`w-full ${
+                          isSelectedGroup
+                            ? 'max-w-5xl'
+                            : `grid grid-cols-[36px_1fr] gap-3 ${
+                          inferredAnswerType === 'long' || inferredAnswerType === 'number'
+                            ? 'max-w-none'
+                            : 'max-w-[400px]'
+                        }`
                         }`}
                       >
-                        <div className="text-sm text-blue-600 font-medium leading-snug flex items-center gap-2 self-start mt-[6px]">
-                          <span className="whitespace-nowrap">{selectedQuestion.id}</span>
-                          <span className="whitespace-nowrap">→</span>
-                      </div>
-                      <div className="flex flex-col items-start text-left">
-                        <div
-                          ref={questionTitleContainerRef}
-                          className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2 w-full relative"
-                        >
-                          <textarea
-                            ref={questionTitleRef}
-                            rows={1}
-                            value={selectedQuestion.text}
-                            onChange={(event) => {
-                              updateQuestion(selectedQuestion.id, (question) => ({
-                                ...question,
-                                text: event.target.value,
-                              }));
-                              if (questionTitleRef.current) {
-                                questionTitleRef.current.style.height = 'auto';
-                                questionTitleRef.current.style.height = `${questionTitleRef.current.scrollHeight}px`;
-                              }
-                            }}
-                            className="text-gray-800 text-[20px] font-semibold bg-transparent focus:outline-none w-full min-w-0 resize-none leading-snug"
-                            placeholder="Your question here. Recall information with @"
-                            style={questionTitleWidth ? { width: questionTitleWidth } : undefined}
-                          />
-                          <span
-                            ref={questionTitleMeasureRef}
-                            className="text-gray-800 text-[20px] font-semibold leading-snug absolute opacity-0 pointer-events-none whitespace-pre -left-[9999px]"
-                            aria-hidden
-                          >
-                            {selectedQuestion.text || 'Your question here. Recall information with @'}
-                          </span>
-                          {selectedSettings.required && (
-                            <span className="text-red-500 font-semibold pt-1 flex-shrink-0">*</span>
-                          )}
-                        </div>
-                      <textarea
-                        rows={1}
-                        value={selectedSettings.description ?? ''}
-                        onChange={(event) => {
-                          updateSelectedQuestionSettings((settings) => ({
-                            ...settings,
-                            description: event.target.value,
-                          }));
-                          if (event.currentTarget) {
-                            event.currentTarget.style.height = 'auto';
-                            event.currentTarget.style.height = `${event.currentTarget.scrollHeight}px`;
-                          }
-                        }}
-                        className="text-sm text-gray-400 italic bg-transparent focus:outline-none w-full mb-6 resize-none leading-snug"
-                        placeholder="Description (optional)"
-                      />
-
-                      {selectedSettings.mediaUrl && (
+                        {!isSelectedGroup && (
+                          <div className="text-sm text-blue-600 font-medium leading-snug flex items-center gap-2 self-start mt-[6px]">
+                            <span className="whitespace-nowrap">{selectedQuestionPosition}</span>
+                            <span className="whitespace-nowrap">→</span>
+                          </div>
+                        )}
+                      <div className={`flex flex-col ${isSelectedGroup ? 'items-center text-center' : 'items-start text-left'}`}>
+                        {!isSelectedGroup && (
+                          <>
+                            <div
+                              ref={questionTitleContainerRef}
+                              className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2 w-full relative"
+                            >
+                              <textarea
+                                ref={questionTitleRef}
+                                rows={1}
+                                value={selectedQuestion.text}
+                                onChange={(event) => {
+                                  updateQuestion(selectedQuestion.id, (question) => ({
+                                    ...question,
+                                    text: event.target.value,
+                                  }));
+                                  if (questionTitleRef.current) {
+                                    questionTitleRef.current.style.height = 'auto';
+                                    questionTitleRef.current.style.height = `${questionTitleRef.current.scrollHeight}px`;
+                                  }
+                                }}
+                                className="text-gray-800 text-[20px] font-semibold bg-transparent focus:outline-none w-full min-w-0 resize-none leading-snug"
+                                placeholder="Your question here. Recall information with @"
+                                style={questionTitleWidth ? { width: questionTitleWidth } : undefined}
+                              />
+                              <span
+                                ref={questionTitleMeasureRef}
+                                className="text-gray-800 text-[20px] font-semibold leading-snug absolute opacity-0 pointer-events-none whitespace-pre -left-[9999px]"
+                                aria-hidden
+                              >
+                                {selectedQuestion.text || 'Your question here. Recall information with @'}
+                              </span>
+                              {selectedSettings.required && (
+                                <span className="text-red-500 font-semibold pt-1 flex-shrink-0">*</span>
+                              )}
+                            </div>
+                            <textarea
+                              rows={1}
+                              value={selectedSettings.description ?? ''}
+                              onChange={(event) => {
+                                updateSelectedQuestionSettings((settings) => ({
+                                  ...settings,
+                                  description: event.target.value,
+                                }));
+                                if (event.currentTarget) {
+                                  event.currentTarget.style.height = 'auto';
+                                  event.currentTarget.style.height = `${event.currentTarget.scrollHeight}px`;
+                                }
+                              }}
+                              className="text-sm text-gray-400 italic bg-transparent focus:outline-none w-full mb-6 resize-none leading-snug"
+                              placeholder="Description (optional)"
+                            />
+                          </>
+                        )}
+                      {selectedSettings.mediaUrl && !isSelectedGroup && (
                         <div className="mb-6">
                           {selectedSettings.mediaType === 'video' ? (
                             <video
@@ -1513,46 +2354,119 @@ Build a qualification form for inbound B2B leads.
                       )}
 
                       {isSelectedGroup ? (
-                        <div className="mt-6 flex items-center gap-3">
-                          <button
-                            type="button"
-                            className="px-6 py-3 rounded-md bg-[#1f3bb3] text-white text-xl font-semibold"
-                          >
-                            {selectedSettings.buttonLabel ?? 'Continue'}
-                          </button>
-                          <span className="text-sm text-gray-600">press Enter ↵</span>
+                        <div className="mt-2 w-full max-w-4xl rounded-[32px] border border-slate-200/80 bg-white/85 px-6 py-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:px-10 sm:py-10">
+                          <div className="flex flex-col gap-6">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <span className="inline-flex w-fit rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold tracking-[0.12em] text-blue-700">
+                                {groupQuestions.length > 0 && selectedGroupIndex >= 0
+                                  ? `Section ${selectedGroupIndex + 1} of ${groupQuestions.length}`
+                                  : 'Section'}
+                              </span>
+                              {selectedGroupQuestionCount > 0 && (
+                                <span className="inline-flex w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold tracking-[0.12em] text-emerald-700 sm:ml-auto">
+                                  {selectedGroupQuestionCount}{' '}
+                                  {selectedGroupQuestionCount === 1 ? 'question ahead' : 'questions ahead'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mx-auto max-w-3xl text-center">
+                              <input
+                                type="text"
+                                value={selectedGroupTitle}
+                                onChange={(event) => {
+                                  updateQuestion(selectedQuestion.id, (question) => ({
+                                    ...question,
+                                    text: event.target.value,
+                                  }));
+                                }}
+                                className="w-full bg-transparent text-center text-3xl font-semibold tracking-tight text-slate-900 focus:outline-none sm:text-5xl"
+                                placeholder="Section title"
+                              />
+                              <textarea
+                                rows={3}
+                                value={selectedSettings.description ?? ''}
+                                onChange={(event) => {
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    description: event.target.value,
+                                  }));
+                                }}
+                                className="mx-auto mt-4 w-full max-w-2xl resize-none bg-transparent text-center text-base leading-7 text-slate-600 focus:outline-none sm:text-lg"
+                                placeholder={selectedGroupSummary}
+                              />
+                            </div>
+                            <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-slate-50/80 px-5 py-4 text-center text-sm leading-6 text-slate-600">
+                              You’re moving into a new topic area. Continue when you’re ready to start this section.
+                            </div>
+                            <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center sm:items-center">
+                              <button
+                                type="button"
+                                className="px-6 py-3 rounded-md bg-[#1f3bb3] text-white text-xl font-semibold"
+                              >
+                                {selectedGroupButtonLabel}
+                              </button>
+                              <span className="text-sm text-gray-600">press Enter ↵</span>
+                            </div>
+                          </div>
                         </div>
                       ) : inferredAnswerType === 'multiple' ? (
                         <div className="flex flex-col gap-3 w-full items-start">
-                          {[
-                            ...(selectedSettings.choices ?? ['Choice A']),
-                            ...(selectedSettings.otherOption ? ['Other'] : []),
-                          ].map((choice, idx) => (
-                            <div
-                              key={`preview-choice-${idx}`}
-                              className="flex items-center gap-3 w-full"
-                            >
-                              <div className="h-8 w-8 rounded-md border border-blue-300 text-blue-600 flex items-center justify-center text-sm font-semibold">
-                                {String.fromCharCode(65 + idx)}
-                              </div>
-                              <input
-                                type="text"
-                                value={choice}
-                                onChange={(event) =>
-                                  updateSelectedChoices((choices) =>
-                                    choices.map((item, itemIdx) =>
-                                      itemIdx === idx ? event.target.value : item
-                                    )
-                                  )
-                                }
-                                className="min-w-[260px] rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-gray-700 focus:outline-none"
-                                disabled={
-                                  selectedSettings.otherOption &&
-                                  idx === (selectedSettings.choices ?? ['Choice A']).length
-                                }
-                              />
-                            </div>
-                          ))}
+                          {(() => {
+                            const choices = selectedSettings.choices ?? ['Choice A'];
+                            const rows = [
+                              ...choices,
+                              ...(selectedSettings.otherOption ? ['Other'] : []),
+                            ];
+                            return rows.map((choice, idx) => {
+                              const isOtherRow = selectedSettings.otherOption && idx === choices.length;
+                              return (
+                                <div
+                                  key={`preview-choice-${idx}`}
+                                  className="flex items-center gap-3 w-full"
+                                >
+                                  <div className="h-8 w-8 rounded-md border border-blue-300 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                                    {getChoiceKey(idx, selectedSettings.choiceKeyStyle)}
+                                  </div>
+                                  <input
+                                    type="text"
+                                    value={choice}
+                                    onChange={(event) =>
+                                      updateSelectedChoices((currentChoices) =>
+                                        currentChoices.map((item, itemIdx) =>
+                                          itemIdx === idx ? event.target.value : item
+                                        )
+                                      )
+                                    }
+                                    onBlur={() => {
+                                      if (isOtherRow) return;
+                                      updateSelectedChoices((currentChoices) => {
+                                        if (currentChoices.length <= 1) return currentChoices;
+                                        return currentChoices.filter(
+                                          (item, itemIdx) => itemIdx !== idx || item.trim().length > 0
+                                        );
+                                      });
+                                    }}
+                                    className="min-w-[260px] rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-gray-700 focus:outline-none"
+                                    disabled={isOtherRow}
+                                  />
+                                  {!isOtherRow && choices.length > 1 && (
+                                    <button
+                                      type="button"
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 text-gray-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                                      aria-label={`Remove choice ${idx + 1}`}
+                                      onClick={() =>
+                                        updateSelectedChoices((currentChoices) =>
+                                          currentChoices.filter((_, itemIdx) => itemIdx !== idx)
+                                        )
+                                      }
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            });
+                          })()}
                           <div className="w-full flex justify-start">
                             <button
                               type="button"
@@ -1583,17 +2497,42 @@ Build a qualification form for inbound B2B leads.
                         </div>
                       ) : inferredAnswerType === 'long' ? (
                         <div className="w-full">
-                          <textarea
-                            rows={1}
-                            value=""
-                            readOnly
-                            className="w-full bg-transparent text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none resize-none pointer-events-none p-0 leading-[1.1] h-[44px]"
-                            style={{ fontSize: '28px' }}
-                            placeholder="Type your answer here..."
-                          />
-                          <div className="text-sm text-blue-700" style={{ marginTop: '2px' }}>
-                            <span className="font-medium">Shift</span> + Enter ↵ to make a line break
-                          </div>
+                          {selectedSettings.longTextFormat === 'steps' ||
+                          selectedSettings.longTextFormat === 'numbered' ? (
+                            <div className="space-y-3">
+                              {[1, 2, 3].map((item) => (
+                                <div key={`preview-list-item-${item}`} className="flex items-center gap-3">
+                                  <div className="w-16 text-sm font-medium text-blue-700">
+                                    {selectedSettings.longTextFormat === 'steps' ? `Step ${item}` : `${item}.`}
+                                  </div>
+                                  <div className="min-w-0 flex-1 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm text-gray-400">
+                                    {selectedSettings.longTextFormat === 'steps'
+                                      ? 'Describe this step...'
+                                      : 'Type an item...'}
+                                  </div>
+                                </div>
+                              ))}
+                              <div className="inline-flex rounded-xl border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700">
+                                {selectedSettings.longTextFormat === 'steps'
+                                  ? 'Add another step'
+                                  : 'Add another item'}
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <textarea
+                                rows={1}
+                                value=""
+                                readOnly
+                                className="w-full bg-transparent text-blue-700 placeholder:text-blue-300 border-b border-blue-400 focus:outline-none resize-none pointer-events-none p-0 leading-[1.1] h-[44px]"
+                                style={{ fontSize: '28px' }}
+                                placeholder="Type your answer here..."
+                              />
+                              <div className="text-sm text-blue-700" style={{ marginTop: '2px' }}>
+                                <span className="font-medium">Shift</span> + Enter ↵ to make a line break
+                              </div>
+                            </>
+                          )}
                         </div>
                       ) : inferredAnswerType === 'date' ? (
                         <div className="w-full">
@@ -1608,7 +2547,7 @@ Build a qualification form for inbound B2B leads.
                                   <React.Fragment key={part}>
                                     <div className="flex flex-col gap-2">
                                       <span>{labels[part]}</span>
-                                      <div className="text-[36px] text-blue-200 border-b border-blue-400 pb-2">{part}</div>
+                                      <div className="text-[36px] text-blue-700 border-b border-blue-400 pb-2">{part}</div>
                                     </div>
                                     {index < parts.length - 1 && (
                                       <div className="text-[36px] text-blue-700 pb-2">{separator}</div>
@@ -1625,19 +2564,67 @@ Build a qualification form for inbound B2B leads.
                             type="text"
                             value=""
                             readOnly
-                            className="w-full bg-transparent text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
+                            className="w-full bg-transparent text-blue-700 placeholder:text-blue-300 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
                             placeholder="name@example.com"
                           />
                         </div>
                       ) : inferredAnswerType === 'number' ? (
                         <div className="w-full">
-                          <input
-                            type="text"
-                            value=""
-                            readOnly
-                            className="w-full bg-transparent text-blue-200 placeholder:text-blue-200 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
-                            placeholder="Type your answer here..."
-                          />
+                          {getNumberScaleOptions(selectedSettings).length > 0 ? (
+                            <div
+                              className={
+                                selectedSettings.choices?.length
+                                  ? 'flex flex-col gap-3 w-full max-w-3xl'
+                                  : 'flex flex-wrap gap-3'
+                              }
+                            >
+                              {getNumberScaleOptions(selectedSettings).map((option, index) => {
+                                const optionLabel = getNumberScaleLabel(selectedSettings, option, index);
+                                const hasLabel = optionLabel !== String(option);
+                                return (
+                                <div
+                                  key={`preview-number-${option}`}
+                                  className={`flex min-h-12 items-center rounded-xl border border-blue-300 bg-white px-4 py-3 text-blue-700 shadow-sm ${
+                                    hasLabel ? 'w-full gap-3 text-left' : 'min-w-12 justify-center text-lg font-semibold'
+                                  }`}
+                                >
+                                  <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-current text-sm font-semibold">
+                                    {option}
+                                  </span>
+                                  {hasLabel && (
+                                    <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-gray-700">
+                                      {optionLabel}
+                                    </span>
+                                  )}
+                                </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="w-full max-w-3xl">
+                              <input
+                                type="text"
+                                value=""
+                                readOnly
+                                className="block w-full bg-transparent text-blue-700 placeholder:text-blue-300 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
+                                placeholder="Type your answer here..."
+                              />
+                              {getNumberUnitChoices(selectedSettings).length > 0 && (
+                                <div className="mt-5 flex flex-col gap-3 w-full items-start">
+                                  {getNumberUnitChoices(selectedSettings).map((unit) => (
+                                    <div
+                                      key={`preview-number-unit-${unit}`}
+                                      className="w-full rounded-xl border border-blue-300 bg-white px-4 py-3 text-blue-700 shadow-sm"
+                                    >
+                                      <span className="text-sm font-medium leading-snug text-gray-700">
+                                        {unit}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="min-w-[280px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-400">
@@ -1672,6 +2659,7 @@ Build a qualification form for inbound B2B leads.
           </div>
         </section>
 
+            {activeTab !== 'responses' && (
             <aside className="w-80 p-4 overflow-y-auto">
           <div className="of-tabs">
             <Tabs.Content value="question">
@@ -1685,7 +2673,9 @@ Build a qualification form for inbound B2B leads.
                           ? 'welcome'
                           : isSelectedEnd
                             ? 'end'
-                            : 'question'
+                            : isSelectedDetails
+                              ? 'details'
+                              : 'question'
                         : ''
                     }
                     onChange={(event) => {
@@ -1696,8 +2686,11 @@ Build a qualification form for inbound B2B leads.
                           ...question,
                           category:
                             question.category === 'Welcome Screen' ||
-                            question.category === 'End Screen'
-                              ? 'General'
+                            question.category === 'End Screen' ||
+                            question.category === 'Details Screen'
+                              ? getCategoryForAnswerType(
+                                  question.settings?.answerType ?? 'long'
+                                )
                               : question.category,
                           settings: {
                             ...(question.settings ?? {}),
@@ -1708,13 +2701,27 @@ Build a qualification form for inbound B2B leads.
                       }
                       updateQuestion(selectedQuestion.id, (question) => ({
                         ...question,
-                        category: nextType === 'welcome' ? 'Welcome Screen' : 'End Screen',
+                        category:
+                          nextType === 'welcome'
+                            ? 'Welcome Screen'
+                            : nextType === 'details'
+                              ? 'Details Screen'
+                              : 'End Screen',
                         settings: {
                           ...(question.settings ?? {}),
-                          kind: nextType === 'welcome' ? 'welcome' : 'end',
+                          kind:
+                            nextType === 'welcome'
+                              ? 'welcome'
+                              : nextType === 'details'
+                                ? 'details'
+                                : 'end',
                           buttonLabel:
                             (question.settings ?? {}).buttonLabel ??
-                            (nextType === 'welcome' ? 'Start' : 'Finish'),
+                            (nextType === 'welcome'
+                              ? 'Start'
+                              : nextType === 'details'
+                                ? 'Continue'
+                                : 'Finish'),
                         },
                       }));
                     }}
@@ -1728,6 +2735,7 @@ Build a qualification form for inbound B2B leads.
                         {schema.questions.some((q) => q.category === 'Welcome Screen') && (
                           <option value="welcome">Welcome Screen</option>
                         )}
+                        <option value="details">Details Screen</option>
                         {schema.questions.some((q) => q.category === 'End Screen') && (
                           <option value="end">End Screen</option>
                         )}
@@ -1809,6 +2817,27 @@ Build a qualification form for inbound B2B leads.
                           />
                         </div>
 
+                        {isSelectedEnd && (
+                          <div>
+                            <label className="of-label">Footer text</label>
+                            <textarea
+                              rows={3}
+                              value={selectedEndFooterText}
+                              onChange={(event) =>
+                                updateSelectedQuestionSettings((settings) => ({
+                                  ...settings,
+                                  footerText: event.target.value,
+                                }))
+                              }
+                              className="of-input min-h-[88px] resize-y"
+                              placeholder="Add optional footer text"
+                            />
+                            <div className="mt-1 text-xs leading-5 text-gray-500">
+                              Leave this blank to remove the text below the end-screen button/message.
+                            </div>
+                          </div>
+                        )}
+
                       <div className="pt-2 border-t border-gray-100 space-y-3">
                         <div className="flex items-center justify-between">
                           <div className="text-sm text-gray-600">Image or video</div>
@@ -1877,6 +2906,39 @@ Build a qualification form for inbound B2B leads.
                         )}
                       </div>
                       </div>
+                    ) : isSelectedDetails ? (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="of-label">Body text</label>
+                          <textarea
+                            rows={8}
+                            value={selectedSettings.description ?? ''}
+                            onChange={(event) =>
+                              updateSelectedQuestionSettings((settings) => ({
+                                ...settings,
+                                description: event.target.value,
+                              }))
+                            }
+                            className="of-input min-h-[180px] resize-y leading-6"
+                            placeholder="Add context, instructions, or longer explanatory text..."
+                          />
+                        </div>
+
+                        <div>
+                          <label className="of-label">Button</label>
+                          <input
+                            type="text"
+                            value={selectedSettings.buttonLabel ?? 'Continue'}
+                            onChange={(event) =>
+                              updateSelectedQuestionSettings((settings) => ({
+                                ...settings,
+                                buttonLabel: event.target.value,
+                              }))
+                            }
+                            className="of-input"
+                          />
+                        </div>
+                      </div>
                     ) : isSelectedGroup ? (
                       <div className="space-y-4">
                         <div>
@@ -1911,14 +2973,40 @@ Build a qualification form for inbound B2B leads.
                           <label className="of-label">Answer</label>
                           <select
                             value={inferredAnswerType ?? 'multiple'}
-                            onChange={(event) =>
-                              updateSelectedQuestionSettings((settings) => ({
-                                ...settings,
-                                answerType: event.target.value as NonNullable<
-                                  FormSchemaV0['questions'][number]['settings']
-                                >['answerType'],
-                              }))
-                            }
+                            onChange={(event) => {
+                              if (!selectedQuestion) return;
+                              const answerType = event.target.value as NonNullable<
+                                FormQuestionSettings['answerType']
+                              >;
+                              updateQuestion(selectedQuestion.id, (question) => {
+                                const settings = question.settings ?? {};
+                                return {
+                                  ...question,
+                                  category: getCategoryForAnswerType(answerType),
+                                  settings: {
+                                    ...settings,
+                                    answerType,
+                                    kind: answerType,
+                                    minNumberEnabled:
+                                      answerType === 'number'
+                                        ? settings.minNumberEnabled ?? true
+                                        : settings.minNumberEnabled,
+                                    minNumber:
+                                      answerType === 'number'
+                                        ? settings.minNumber ?? 1
+                                        : settings.minNumber,
+                                    maxNumberEnabled:
+                                      answerType === 'number'
+                                        ? settings.maxNumberEnabled ?? true
+                                        : settings.maxNumberEnabled,
+                                    maxNumber:
+                                      answerType === 'number'
+                                        ? settings.maxNumber ?? 5
+                                        : settings.maxNumber,
+                                  },
+                                };
+                              });
+                            }}
                             className="of-input"
                           >
                             <option value="multiple">Multiple Choice</option>
@@ -1929,6 +3017,27 @@ Build a qualification form for inbound B2B leads.
                             <option value="date">Date</option>
                           </select>
                         </div>
+
+                        {inferredAnswerType === 'multiple' && (
+                          <div>
+                            <label className="of-label">Choice numbering</label>
+                            <select
+                              value={selectedSettings.choiceKeyStyle ?? 'letters'}
+                              onChange={(event) =>
+                                updateSelectedQuestionSettings((settings) => ({
+                                  ...settings,
+                                  choiceKeyStyle: event.target.value as NonNullable<
+                                    FormQuestionSettings['choiceKeyStyle']
+                                  >,
+                                }))
+                              }
+                              className="of-input"
+                            >
+                              <option value="letters">Letters (A, B, C)</option>
+                              <option value="numbers">Numbers (1, 2, 3)</option>
+                            </select>
+                          </div>
+                        )}
 
                         <div className="space-y-3">
                           {questionToggleSettings
@@ -1967,7 +3076,30 @@ Build a qualification form for inbound B2B leads.
                         </div>
 
                         {inferredAnswerType === 'long' && (
-                          <div className="space-y-2">
+                          <div className="space-y-4">
+                            <div>
+                              <label className="of-label">Text format</label>
+                              <select
+                                value={selectedSettings.longTextFormat ?? 'paragraph'}
+                                onChange={(event) =>
+                                  updateSelectedQuestionSettings((settings) => ({
+                                    ...settings,
+                                    longTextFormat: event.target.value as NonNullable<
+                                      FormQuestionSettings['longTextFormat']
+                                    >,
+                                  }))
+                                }
+                                className="of-input"
+                              >
+                                <option value="paragraph">Paragraph text</option>
+                                <option value="steps">Step list</option>
+                                <option value="numbered">Numbered list</option>
+                              </select>
+                              <div className="mt-1 text-xs leading-5 text-gray-500">
+                                Step list is for ordered process steps. Numbered list is for collecting multiple separate responses.
+                              </div>
+                            </div>
+
                             <div className="flex items-center justify-between">
                               <div className="text-sm text-gray-600">Max characters</div>
                               <Switch.Root
@@ -2044,7 +3176,7 @@ Build a qualification form for inbound B2B leads.
                         )}
 
                         {inferredAnswerType === 'number' && (
-                          <div className="space-y-2">
+                          <div className="space-y-4">
                             <div className="flex items-center justify-between">
                               <div className="text-sm text-gray-600">Min number</div>
                               <Switch.Root
@@ -2103,6 +3235,107 @@ Build a qualification form for inbound B2B leads.
                                 className="of-input"
                                 placeholder="0"
                               />
+                            )}
+
+                            {getNumberScaleOptions(selectedSettings).length > 0 && (
+                              <div className="space-y-2 pt-2">
+                                <div>
+                                  <div className="text-sm font-medium text-gray-700">Scale labels</div>
+                                  <div className="mt-1 text-xs leading-5 text-gray-500">
+                                    Optional labels shown next to each numeric score. The saved answer remains the number.
+                                  </div>
+                                </div>
+                                {getNumberScaleOptions(selectedSettings).map((option, index) => (
+                                  <div key={`number-label-${option}`} className="flex items-center gap-3">
+                                    <div className="h-8 w-8 shrink-0 rounded-md border border-blue-300 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                                      {option}
+                                    </div>
+                                    <input
+                                      type="text"
+                                      value={selectedSettings.choices?.[index] ?? ''}
+                                      onChange={(event) => {
+                                        const nextLabel = event.target.value;
+                                        updateSelectedQuestionSettings((settings) => {
+                                          const optionCount = getNumberScaleOptions(settings).length;
+                                          const labels = Array.from(
+                                            { length: optionCount },
+                                            (_, labelIndex) => settings.choices?.[labelIndex] ?? ''
+                                          );
+                                          labels[index] = nextLabel;
+                                          return {
+                                            ...settings,
+                                            choices: labels,
+                                          };
+                                        });
+                                      }}
+                                      className="of-input"
+                                      placeholder={`Label for ${option}`}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {getNumberScaleOptions(selectedSettings).length === 0 && (
+                              <div className="space-y-3 pt-2">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-700">Unit choices</div>
+                                    <div className="mt-1 text-xs leading-5 text-gray-500">
+                                      Add optional units shown underneath the number input, such as days, weeks, or months.
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="text-sm text-blue-600 hover:text-blue-700"
+                                    onClick={() =>
+                                      updateSelectedQuestionSettings((settings) => ({
+                                        ...settings,
+                                        numberUnitChoices: [...(settings.numberUnitChoices ?? []), ''],
+                                      }))
+                                    }
+                                  >
+                                    Add unit
+                                  </button>
+                                </div>
+                                {(selectedSettings.numberUnitChoices ?? []).length > 0 && (
+                                  <div className="space-y-2">
+                                    {(selectedSettings.numberUnitChoices ?? []).map((unit, index) => (
+                                      <div key={`number-unit-choice-${index}`} className="flex items-center gap-2">
+                                        <input
+                                          type="text"
+                                          value={unit}
+                                          onChange={(event) =>
+                                            updateSelectedQuestionSettings((settings) => ({
+                                              ...settings,
+                                              numberUnitChoices: (settings.numberUnitChoices ?? []).map(
+                                                (item, itemIndex) =>
+                                                  itemIndex === index ? event.target.value : item
+                                              ),
+                                            }))
+                                          }
+                                          className="of-input"
+                                          placeholder={index === 0 ? 'Days' : 'Unit label'}
+                                        />
+                                        <button
+                                          type="button"
+                                          className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-500 hover:text-gray-700"
+                                          onClick={() =>
+                                            updateSelectedQuestionSettings((settings) => ({
+                                              ...settings,
+                                              numberUnitChoices: (settings.numberUnitChoices ?? []).filter(
+                                                (_, itemIndex) => itemIndex !== index
+                                              ),
+                                            }))
+                                          }
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
@@ -2215,10 +3448,11 @@ Build a qualification form for inbound B2B leads.
                           {(selectedQuestion.branching.conditions ?? []).map((condition, index) => {
                             const answerType = inferQuestionAnswerType(selectedQuestion);
                             const operatorOptions = getBranchOperatorOptions(selectedQuestion);
-                            const multipleChoiceOptions = [
-                              ...(selectedQuestion.settings?.choices ?? []),
-                              ...(selectedQuestion.settings?.otherOption ? ['Other'] : []),
-                            ];
+                            const selectionOptions = getBranchSelectionOptions(selectedQuestion);
+                            const usesSelectionBranching =
+                              selectionOptions.length > 0 &&
+                              (answerType === 'multiple' || answerType === 'number');
+                            const selectionOperator = getBranchSelectionOperator(selectedQuestion);
                             const valueString =
                               typeof condition.when.value === 'number'
                                 ? String(condition.when.value)
@@ -2233,9 +3467,11 @@ Build a qualification form for inbound B2B leads.
                                 key={`branch-condition-${selectedQuestion.id}-${index}`}
                                 className="space-y-3 rounded-2xl border border-gray-200 p-4"
                               >
-                                <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,1fr)_minmax(0,180px)_auto]">
+                                <div className="space-y-3">
                                   <div>
-                                    <label className="of-label">When</label>
+                                    <label className="of-label">
+                                      {usesSelectionBranching ? 'Answer option' : 'When'}
+                                    </label>
                                     {answerType === 'yesno' ? (
                                       <select
                                         value={condition.when.answer ? 'yes' : 'no'}
@@ -2258,6 +3494,40 @@ Build a qualification form for inbound B2B leads.
                                       >
                                         <option value="yes">Answer is Yes</option>
                                         <option value="no">Answer is No</option>
+                                      </select>
+                                    ) : usesSelectionBranching ? (
+                                      <select
+                                        value={selectionOptions.includes(valueString) ? valueString : selectionOptions[0]}
+                                        onChange={(event) => {
+                                          const nextValue = event.target.value;
+                                          updateQuestion(selectedQuestion.id, (question) => ({
+                                            ...question,
+                                            branching: {
+                                              ...(question.branching ?? {}),
+                                              conditions: (question.branching?.conditions ?? []).map(
+                                                (entry, entryIndex) =>
+                                                  entryIndex === index
+                                                    ? {
+                                                        ...entry,
+                                                        when: {
+                                                          operator: getBranchSelectionOperator(question),
+                                                          value: nextValue,
+                                                        },
+                                                      }
+                                                    : entry
+                                              ),
+                                            },
+                                          }));
+                                        }}
+                                        className="of-input"
+                                      >
+                                        {selectionOptions.map((option) => (
+                                          <option key={`${selectedQuestion.id}-${option}`} value={option}>
+                                            {selectionOperator === 'contains'
+                                              ? `Selection includes ${option}`
+                                              : option}
+                                          </option>
+                                        ))}
                                       </select>
                                     ) : (
                                       <select
@@ -2302,41 +3572,17 @@ Build a qualification form for inbound B2B leads.
                                     )}
                                   </div>
 
+                                  {!usesSelectionBranching && (
                                   <div>
                                     <label className="of-label">Value</label>
-                                    {answerType === 'yesno' || !conditionNeedsValue(condition) ? (
+                                    {answerType === 'yesno' ? (
                                       <div className="of-input flex items-center text-gray-400">
                                         Not required
                                       </div>
-                                    ) : answerType === 'multiple' ? (
-                                      <select
-                                        value={valueString}
-                                        onChange={(event) => {
-                                          const nextValue = event.target.value;
-                                          updateQuestion(selectedQuestion.id, (question) => ({
-                                            ...question,
-                                            branching: {
-                                              ...(question.branching ?? {}),
-                                              conditions: (question.branching?.conditions ?? []).map(
-                                                (entry, entryIndex) =>
-                                                  entryIndex === index
-                                                    ? {
-                                                        ...entry,
-                                                        when: { ...entry.when, value: nextValue },
-                                                      }
-                                                    : entry
-                                              ),
-                                            },
-                                          }));
-                                        }}
-                                        className="of-input"
-                                      >
-                                        {multipleChoiceOptions.map((option) => (
-                                          <option key={`${selectedQuestion.id}-${option}`} value={option}>
-                                            {option}
-                                          </option>
-                                        ))}
-                                      </select>
+                                    ) : !conditionNeedsValue(condition) ? (
+                                      <div className="of-input flex items-center text-gray-400">
+                                        Not required
+                                      </div>
                                     ) : answerType === 'number' ? (
                                       <input
                                         type="number"
@@ -2393,6 +3639,7 @@ Build a qualification form for inbound B2B leads.
                                       />
                                     )}
                                   </div>
+                                  )}
 
                                   <div>
                                     <label className="of-label">Go to</label>
@@ -2416,14 +3663,14 @@ Build a qualification form for inbound B2B leads.
                                       className="of-input"
                                     >
                                       {questionOptions.map((option) => (
-                                        <option key={`condition-next-${index}-${option}`} value={option}>
-                                          Question {option}
+                                        <option key={`condition-next-${index}-${option.id}`} value={option.id}>
+                                          {option.label}
                                         </option>
                                       ))}
                                     </select>
                                   </div>
 
-                                  <div className="flex items-end">
+                                  <div className="flex justify-end">
                                     <button
                                       type="button"
                                       className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -2466,8 +3713,8 @@ Build a qualification form for inbound B2B leads.
                           className="of-input"
                         >
                           {questionOptions.map((option) => (
-                            <option key={`next-${option}`} value={option}>
-                              Question {option}
+                            <option key={`next-${option.id}`} value={option.id}>
+                              {option.label}
                             </option>
                           ))}
                         </select>
@@ -2480,9 +3727,284 @@ Build a qualification form for inbound B2B leads.
               )}
             </Tabs.Content>
 
+            <Tabs.Content value="loops">
+              <div className="space-y-5">
+                <div>
+                  <div className="text-sm font-medium text-gray-700">Repeat loops</div>
+                  <div className="mt-1 text-xs leading-5 text-gray-500">
+                    Define a span of the form that can be repeated as a new answer instance, such as multiple processes in one submission.
+                  </div>
+                </div>
+
+                {(schema.repeatLoops ?? []).length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                    No repeat loops configured yet.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {(schema.repeatLoops ?? []).map((loop, index) => (
+                      <div key={loop.id} className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold text-gray-800">
+                            {loop.label || `Loop ${index + 1}`}
+                          </div>
+                          <button
+                            type="button"
+                            className="text-sm text-red-600 hover:text-red-700"
+                            onClick={() =>
+                              setSchema((prev) => ({
+                                ...prev,
+                                repeatLoops: (prev.repeatLoops ?? []).filter((item) => item.id !== loop.id),
+                              }))
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <label className="of-label">Singular label</label>
+                            <input
+                              type="text"
+                              value={loop.label}
+                              onChange={(event) =>
+                                setSchema((prev) => ({
+                                  ...prev,
+                                  repeatLoops: (prev.repeatLoops ?? []).map((item) =>
+                                    item.id === loop.id ? { ...item, label: event.target.value } : item
+                                  ),
+                                }))
+                              }
+                              className="of-input"
+                              placeholder="Process"
+                            />
+                          </div>
+                          <div>
+                            <label className="of-label">Plural label</label>
+                            <input
+                              type="text"
+                              value={loop.pluralLabel ?? ''}
+                              onChange={(event) =>
+                                setSchema((prev) => ({
+                                  ...prev,
+                                  repeatLoops: (prev.repeatLoops ?? []).map((item) =>
+                                    item.id === loop.id ? { ...item, pluralLabel: event.target.value } : item
+                                  ),
+                                }))
+                              }
+                              className="of-input"
+                              placeholder="Processes"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <label className="of-label">Loop starts at</label>
+                            <select
+                              value={loop.startQuestionId}
+                              onChange={(event) =>
+                                setSchema((prev) => ({
+                                  ...prev,
+                                  repeatLoops: (prev.repeatLoops ?? []).map((item) =>
+                                    item.id === loop.id
+                                      ? { ...item, startQuestionId: Number(event.target.value) }
+                                      : item
+                                  ),
+                                }))
+                              }
+                              className="of-input"
+                            >
+                              {questionOptions.map((option) => (
+                                <option key={`loop-start-${loop.id}-${option.id}`} value={option.id}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="of-label">Loop ends after</label>
+                            <select
+                              value={loop.endQuestionId}
+                              onChange={(event) =>
+                                setSchema((prev) => ({
+                                  ...prev,
+                                  repeatLoops: (prev.repeatLoops ?? []).map((item) =>
+                                    item.id === loop.id ? { ...item, endQuestionId: Number(event.target.value) } : item
+                                  ),
+                                }))
+                              }
+                              className="of-input"
+                            >
+                              {questionOptions.map((option) => (
+                                <option key={`loop-end-${loop.id}-${option.id}`} value={option.id}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="of-label">After loop continue to</label>
+                            <select
+                              value={loop.exitQuestionId ?? ''}
+                              onChange={(event) =>
+                                setSchema((prev) => ({
+                                  ...prev,
+                                  repeatLoops: (prev.repeatLoops ?? []).map((item) =>
+                                    item.id === loop.id
+                                      ? {
+                                          ...item,
+                                          exitQuestionId: event.target.value ? Number(event.target.value) : undefined,
+                                        }
+                                      : item
+                                  ),
+                                }))
+                              }
+                              className="of-input"
+                            >
+                              <option value="">Next/end screen</option>
+                              {questionOptions.map((option) => (
+                                <option key={`loop-exit-${loop.id}-${option.id}`} value={option.id}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="of-label">Summary title answer</label>
+                            <select
+                              value={loop.titleQuestionId ?? ''}
+                              onChange={(event) =>
+                                setSchema((prev) => ({
+                                  ...prev,
+                                  repeatLoops: (prev.repeatLoops ?? []).map((item) =>
+                                    item.id === loop.id
+                                      ? {
+                                          ...item,
+                                          titleQuestionId: event.target.value ? Number(event.target.value) : undefined,
+                                        }
+                                      : item
+                                  ),
+                                }))
+                              }
+                              className="of-input"
+                            >
+                              <option value="">Use Process 1, Process 2...</option>
+                              {schema.questions
+                                .filter((question) => inferQuestionAnswerType(question) !== 'yesno')
+                                .map((question, questionIndex) => (
+                                  <option key={`loop-title-${loop.id}-${question.id}`} value={question.id}>
+                                    {getQuestionDisplayLabel(question, questionIndex)} - {question.text}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <label className="of-label">Add another button</label>
+                            <input
+                              type="text"
+                              value={loop.addAnotherLabel ?? ''}
+                              onChange={(event) =>
+                                setSchema((prev) => ({
+                                  ...prev,
+                                  repeatLoops: (prev.repeatLoops ?? []).map((item) =>
+                                    item.id === loop.id ? { ...item, addAnotherLabel: event.target.value } : item
+                                  ),
+                                }))
+                              }
+                              className="of-input"
+                              placeholder={`Add another ${loop.label.toLowerCase() || 'item'}`}
+                            />
+                          </div>
+                          <div>
+                            <label className="of-label">Continue button</label>
+                            <input
+                              type="text"
+                              value={loop.continueLabel ?? ''}
+                              onChange={(event) =>
+                                setSchema((prev) => ({
+                                  ...prev,
+                                  repeatLoops: (prev.repeatLoops ?? []).map((item) =>
+                                    item.id === loop.id ? { ...item, continueLabel: event.target.value } : item
+                                  ),
+                                }))
+                              }
+                              className="of-input"
+                              placeholder="Continue"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:text-gray-400"
+                  disabled={schema.questions.length < 2}
+                  onClick={() => {
+                    const firstFlow = schema.questions.find((question) => question.category !== 'Welcome Screen');
+                    const lastFlow = [...schema.questions]
+                      .reverse()
+                      .find((question) => question.category !== 'End Screen');
+                    if (!firstFlow || !lastFlow) return;
+                    const id = `loop-${Date.now()}`;
+                    setSchema((prev) => ({
+                      ...prev,
+                      repeatLoops: [
+                        ...(prev.repeatLoops ?? []),
+                        {
+                          id,
+                          label: 'Process',
+                          pluralLabel: 'Processes',
+                          startQuestionId: firstFlow.id,
+                          endQuestionId: lastFlow.id,
+                          addAnotherLabel: 'Add another process',
+                          continueLabel: 'Continue',
+                        },
+                      ],
+                    }));
+                  }}
+                >
+                  Add repeat loop
+                </button>
+              </div>
+            </Tabs.Content>
+
             <Tabs.Content value="theme">
               <div className="space-y-3">
                 <div className="text-sm font-medium text-gray-600">Design</div>
+                <div className="rounded-xl border border-gray-200 bg-white p-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <div className="text-sm font-medium text-gray-700">Scoring framework</div>
+                      <div className="mt-1 text-xs leading-5 text-gray-500">
+                        Enable weighted answers and score-based result bands for assessment forms.
+                      </div>
+                    </div>
+                    <Switch.Root
+                      className="of-switch"
+                      checked={scoringEnabled}
+                      onCheckedChange={(checked) =>
+                        setSchema((prev) => ({
+                          ...prev,
+                          scoringEnabled: checked,
+                          results:
+                            checked && prev.results.length === 0
+                              ? baseResults
+                              : prev.results,
+                        }))
+                      }
+                    >
+                      <Switch.Thumb className="of-switch-thumb" />
+                    </Switch.Root>
+                  </div>
+                </div>
                 <div>
                   <label className="of-label">Primary color</label>
                   <input
@@ -2676,6 +4198,7 @@ Build a qualification form for inbound B2B leads.
             </Tabs.Content>
           </div>
             </aside>
+            )}
           </div>
         </div>
       </div>

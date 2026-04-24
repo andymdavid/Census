@@ -139,7 +139,7 @@ body {
 }
 
 .typeform-content {
-  @apply flex flex-col items-center justify-center flex-grow w-full max-w-4xl mx-auto px-4 py-16 absolute inset-0;
+  @apply flex flex-col items-center justify-center flex-grow w-full max-w-4xl mx-auto px-5 py-12 absolute inset-0 sm:px-4 sm:py-16;
 }
 
 .typeform-content-preview {
@@ -176,10 +176,27 @@ body {
   @apply overflow-y-auto;
 }
 
+.typeform-fullscreen-readable {
+  @apply justify-start overflow-y-auto;
+}
+
 .typeform-content-scroll {
   @apply relative inset-auto;
   padding-top: 4rem;
   padding-bottom: 4rem;
+}
+
+.typeform-content-readable {
+  @apply relative inset-auto justify-start max-w-7xl;
+  padding-top: 5rem;
+  padding-bottom: 3rem;
+}
+
+@media (min-width: 640px) {
+  .typeform-content-readable {
+    padding-top: 6rem;
+    padding-bottom: 4rem;
+  }
 }
 
 .typeform-options {
@@ -188,7 +205,21 @@ body {
 
 /* Updated minimal button styles */
 .typeform-option-button {
-  @apply w-full sm:w-32 h-14 text-lg font-medium rounded-lg transition-all duration-300 flex items-center justify-center;
+  @apply w-full sm:w-32 text-lg font-medium rounded-lg transition-all duration-300 flex items-center justify-center;
+  min-height: 3.5rem;
+}
+
+.typeform-option-choice {
+  @apply sm:w-full max-w-3xl justify-start gap-3 px-4 py-3 text-left leading-snug whitespace-normal;
+}
+
+.typeform-option-key {
+  @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border text-sm font-semibold;
+  border-color: currentColor;
+}
+
+.typeform-option-label {
+  @apply min-w-0 flex-1 break-words;
 }
 
 .typeform-option-yes {

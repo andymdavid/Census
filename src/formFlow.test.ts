@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FormSchemaV0 } from './types/formSchema';
 import {
   getFirstAnswerableQuestionId,
+  getFirstFlowQuestionId,
   getNextQuestionId,
   getTerminalQuestionIds,
 } from '../shared/formFlow';
@@ -24,14 +25,49 @@ describe('formFlow', () => {
     expect(getFirstAnswerableQuestionId(form)).toBe(2);
   });
 
-  it('skips group screens when resolving the next question', () => {
+  it('starts on a details screen when it is the first flow step', () => {
+    const form = createForm([
+      { id: 1, text: 'Welcome', weight: 0, category: 'Welcome Screen', settings: { kind: 'welcome' } },
+      {
+        id: 2,
+        text: 'Please read this',
+        weight: 0,
+        category: 'Details Screen',
+        settings: { kind: 'details', description: 'Important context.' },
+      },
+      { id: 3, text: 'Question', weight: 10, category: 'Yes/No', settings: { answerType: 'yesno' } },
+    ]);
+
+    expect(getFirstAnswerableQuestionId(form)).toBe(3);
+    expect(getFirstFlowQuestionId(form)).toBe(2);
+  });
+
+  it('routes through details screens without collecting an answer', () => {
+    const form = createForm([
+      { id: 1, text: 'Question 1', weight: 10, category: 'Yes/No', settings: { answerType: 'yesno' } },
+      {
+        id: 2,
+        text: 'Details',
+        weight: 0,
+        category: 'Details Screen',
+        settings: { kind: 'details', description: 'Read this before continuing.' },
+      },
+      { id: 3, text: 'Question 2', weight: 10, category: 'Yes/No', settings: { answerType: 'yesno' } },
+    ]);
+
+    expect(getNextQuestionId(form, 1, true)).toBe(2);
+    expect(getNextQuestionId(form, 2, undefined)).toBe(3);
+  });
+
+  it('routes through group screens without collecting an answer', () => {
     const form = createForm([
       { id: 1, text: 'Question 1', weight: 10, category: 'Yes/No', settings: { answerType: 'yesno' } },
       { id: 2, text: 'Section', weight: 0, category: 'Question Group', settings: { kind: 'group' } },
       { id: 3, text: 'Question 2', weight: 10, category: 'Yes/No', settings: { answerType: 'yesno' } },
     ]);
 
-    expect(getNextQuestionId(form, 1, true)).toBe(3);
+    expect(getNextQuestionId(form, 1, true)).toBe(2);
+    expect(getNextQuestionId(form, 2, undefined)).toBe(3);
   });
 
   it('treats a question before an end screen as terminal', () => {
@@ -90,6 +126,28 @@ describe('formFlow', () => {
 
     expect(getNextQuestionId(form, 1, 'Beta')).toBe(3);
     expect(getNextQuestionId(form, 1, 'Alpha')).toBe(4);
+  });
+
+  it('routes specified Other answers through the Other branch', () => {
+    const form = createForm([
+      {
+        id: 1,
+        text: 'Pick one',
+        weight: 1,
+        category: 'Multiple Choice',
+        settings: { answerType: 'multiple', choices: ['Alpha'], otherOption: true },
+        branching: {
+          next: 4,
+          conditions: [{ when: { operator: 'equals', value: 'Other' }, next: 3 }],
+        },
+      },
+      { id: 2, text: 'Unused', weight: 1, category: 'Yes/No', settings: { answerType: 'yesno' } },
+      { id: 3, text: 'Other path', weight: 1, category: 'Yes/No', settings: { answerType: 'yesno' } },
+      { id: 4, text: 'Default path', weight: 1, category: 'Yes/No', settings: { answerType: 'yesno' } },
+    ]);
+
+    expect(getNextQuestionId(form, 1, 'Other')).toBe(3);
+    expect(getNextQuestionId(form, 1, 'Other: Legacy platform')).toBe(3);
   });
 
   it('routes multi-select answers by contains operator', () => {

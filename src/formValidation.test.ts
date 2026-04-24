@@ -9,6 +9,7 @@ const createForm = (questions: FormSchemaV0['questions']): FormSchemaV0 => ({
   version: 'v0',
   id: 'test-form',
   title: 'Test form',
+  scoringEnabled: true,
   questions,
   results: [{ label: 'Default', description: 'Default result' }],
 });
@@ -22,6 +23,25 @@ describe('formValidation', () => {
 
     const { errors } = parseAndValidateFormSchema(form);
     expect(errors).toContain('Question IDs must be unique.');
+  });
+
+  it('rejects invalid multiple-choice key styles', () => {
+    const form = createForm([
+      {
+        id: 1,
+        text: 'Pick one',
+        weight: 1,
+        category: 'Multiple Choice',
+        settings: {
+          answerType: 'multiple',
+          choices: ['Alpha', 'Beta'],
+          choiceKeyStyle: 'roman' as never,
+        },
+      },
+    ]);
+
+    const { errors } = parseAndValidateFormSchema(form);
+    expect(errors).toContain('Question 1 has an invalid choice key style.');
   });
 
   it('accepts operator-based branching on supported question types', () => {
@@ -117,6 +137,33 @@ describe('formValidation', () => {
     expect(errors).toEqual([]);
   });
 
+  it('accepts completed responses that end on a terminal details screen', () => {
+    const form = createForm([
+      { id: 1, text: 'Question', weight: 1, category: 'Yes/No', settings: { answerType: 'yesno' } },
+      {
+        id: 2,
+        text: 'Read before finishing',
+        weight: 0,
+        category: 'Details Screen',
+        settings: { kind: 'details', description: 'Final context.' },
+      },
+      { id: 3, text: 'Done', weight: 0, category: 'End Screen', settings: { kind: 'end' } },
+    ]);
+
+    const errors = validateResponseSubmission(form, {
+      answers: [{ questionId: '1', answer: 'yes' }],
+      score: 1,
+      completed: true,
+      meta: {
+        visitedQuestionIds: [1, 2],
+        lastQuestionId: 2,
+        completed: true,
+      },
+    });
+
+    expect(errors).toEqual([]);
+  });
+
   it('rejects completed responses that do not end on a terminal question', () => {
     const form = createForm([
       { id: 1, text: 'Question 1', weight: 1, category: 'Yes/No', settings: { answerType: 'yesno' } },
@@ -179,6 +226,163 @@ describe('formValidation', () => {
     });
 
     expect(errors).toContain('Question 1 has an invalid answer value.');
+  });
+
+  it('accepts single-select multiple-choice labels that contain commas', () => {
+    const form = createForm([
+      {
+        id: 1,
+        text: 'Automation readiness',
+        weight: 1,
+        category: 'Multiple Choice',
+        settings: {
+          answerType: 'multiple',
+          choices: [
+            'Not ready. Too variable, undocumented, or exception-heavy.',
+            'Ready now. Documented, repeatable, and well-bounded.',
+          ],
+        },
+      },
+    ]);
+
+    const errors = validateResponseSubmission(form, {
+      answers: [
+        {
+          questionId: '1',
+          answer: 'Not ready. Too variable, undocumented, or exception-heavy.',
+        },
+      ],
+      score: 1,
+      completed: false,
+      meta: {
+        visitedQuestionIds: [1],
+        lastQuestionId: 1,
+        completed: false,
+      },
+    });
+
+    expect(errors).toEqual([]);
+  });
+
+  it('accepts configured blocker choice labels with multiple commas', () => {
+    const form = createForm([
+      {
+        id: 33,
+        text: 'What is the main blocker to automating this process today?',
+        weight: 1,
+        category: 'Multiple Choice',
+        settings: {
+          answerType: 'multiple',
+          choices: [
+            'No clear owner or accountability',
+            'Process is not documented or consistent enough',
+            'Source data is messy, incomplete, or inaccessible',
+            'Too many exceptions to handle reliably',
+          ],
+        },
+      },
+    ]);
+
+    const errors = validateResponseSubmission(form, {
+      answers: [
+        {
+          questionId: '33',
+          answer: 'Source data is messy, incomplete, or inaccessible',
+        },
+      ],
+      score: 1,
+      completed: false,
+      meta: {
+        visitedQuestionIds: [33],
+        lastQuestionId: 33,
+        completed: false,
+      },
+    });
+
+    expect(errors).toEqual([]);
+  });
+
+  it('accepts duplicate answers for repeated loop instances', () => {
+    const form = createForm([
+      {
+        id: 1,
+        text: 'Process name',
+        weight: 0,
+        category: 'Text',
+        settings: { answerType: 'long' },
+      },
+      {
+        id: 2,
+        text: 'Is it documented?',
+        weight: 0,
+        category: 'Yes/No',
+        settings: { answerType: 'yesno' },
+      },
+      { id: 3, text: 'Done', weight: 0, category: 'End Screen', settings: { kind: 'end' } },
+    ]);
+    form.repeatLoops = [
+      {
+        id: 'process-loop',
+        label: 'Process',
+        startQuestionId: 1,
+        endQuestionId: 2,
+        exitQuestionId: 3,
+        titleQuestionId: 1,
+      },
+    ];
+
+    const errors = validateResponseSubmission(form, {
+      answers: [
+        { questionId: '1', answer: 'Invoice approvals' },
+        { questionId: '2', answer: 'yes' },
+        { questionId: '1', answer: 'Employee onboarding' },
+        { questionId: '2', answer: 'no' },
+      ],
+      score: 0,
+      completed: true,
+      meta: {
+        visitedQuestionIds: [1, 2],
+        lastQuestionId: 2,
+        completed: true,
+        repeatLoops: [
+          {
+            loopId: 'process-loop',
+            label: 'Process',
+            instances: [
+              { index: 1, title: 'Invoice approvals', questionIds: [1, 2] },
+              { index: 2, title: 'Employee onboarding', questionIds: [1, 2] },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(errors).toEqual([]);
+  });
+
+  it('accepts specified Other answers when the option is enabled', () => {
+    const form = createForm([
+      {
+        id: 1,
+        text: 'Pick one',
+        weight: 1,
+        category: 'Multiple Choice',
+        settings: { answerType: 'multiple', choices: ['Alpha', 'Beta'], otherOption: true },
+      },
+    ]);
+
+    const errors = validateResponseSubmission(form, {
+      answers: [{ questionId: '1', answer: 'Other: Legacy platform' }],
+      score: 1,
+      completed: false,
+      meta: {
+        visitedQuestionIds: [1],
+        lastQuestionId: 1,
+        completed: false,
+      },
+    });
+
+    expect(errors).toEqual([]);
   });
 
   it('rejects numeric answers outside configured min and max bounds', () => {

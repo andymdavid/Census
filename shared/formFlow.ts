@@ -2,6 +2,7 @@ import type {
   FormBranchCondition,
   FormQuestion,
   FormQuestionSettings,
+  FormRepeatLoop,
   FormSchemaV0,
 } from '../src/types/formSchema';
 
@@ -9,12 +10,42 @@ export interface ResponsePathMeta {
   visitedQuestionIds?: number[];
   lastQuestionId?: number;
   completed?: boolean;
+  draftToken?: string;
+  repeatLoops?: Array<{
+    loopId: string;
+    label: string;
+    instances: Array<{
+      index: number;
+      title?: string;
+      questionIds: number[];
+    }>;
+  }>;
 }
 
 export type FormAnswerValue = boolean | string | string[] | undefined;
 
-const NON_ANSWERABLE_KINDS: Array<FormQuestionSettings['kind']> = ['welcome', 'end', 'group'];
-const NON_ANSWERABLE_CATEGORIES = new Set(['Welcome Screen', 'End Screen', 'Question Group']);
+export const hasScoredResults = (form: FormSchemaV0) => {
+  return form.results.some(
+    (result) => result.minScore !== undefined || result.maxScore !== undefined
+  );
+};
+
+export const isScoringEnabled = (form: FormSchemaV0) => {
+  return form.scoringEnabled ?? hasScoredResults(form);
+};
+
+export const getTotalScore = (form: FormSchemaV0) => {
+  if (!isScoringEnabled(form)) return 0;
+  return form.questions.reduce((sum, question) => sum + question.weight, 0);
+};
+
+const NON_ANSWERABLE_KINDS: Array<FormQuestionSettings['kind']> = ['welcome', 'end', 'group', 'details'];
+const NON_ANSWERABLE_CATEGORIES = new Set([
+  'Welcome Screen',
+  'End Screen',
+  'Question Group',
+  'Details Screen',
+]);
 
 export const isAnswerableQuestion = (question: FormQuestion) => {
   if (NON_ANSWERABLE_CATEGORIES.has(question.category)) {
@@ -24,8 +55,56 @@ export const isAnswerableQuestion = (question: FormQuestion) => {
   return !NON_ANSWERABLE_KINDS.includes(question.settings?.kind);
 };
 
+export const isFlowQuestion = (question: FormQuestion) => {
+  if (question.settings?.kind === 'welcome' || question.category === 'Welcome Screen') {
+    return false;
+  }
+
+  if (question.settings?.kind === 'end' || question.category === 'End Screen') {
+    return false;
+  }
+
+  return true;
+};
+
 const getQuestionMap = (form: FormSchemaV0) => {
   return new Map(form.questions.map((question) => [question.id, question]));
+};
+
+export const getQuestionRangeIds = (
+  form: FormSchemaV0,
+  startQuestionId: number,
+  endQuestionId: number
+) => {
+  const startIndex = form.questions.findIndex((question) => question.id === startQuestionId);
+  const endIndex = form.questions.findIndex((question) => question.id === endQuestionId);
+  if (startIndex === -1 || endIndex === -1 || startIndex > endIndex) {
+    return [];
+  }
+  return form.questions.slice(startIndex, endIndex + 1).map((question) => question.id);
+};
+
+export const getRepeatLoopForQuestion = (
+  form: FormSchemaV0,
+  questionId: number
+): FormRepeatLoop | undefined => {
+  return form.repeatLoops?.find((loop) =>
+    getQuestionRangeIds(form, loop.startQuestionId, loop.endQuestionId).includes(questionId)
+  );
+};
+
+export const getRepeatLoopAfterQuestion = (
+  form: FormSchemaV0,
+  questionId: number
+): FormRepeatLoop | undefined => {
+  return form.repeatLoops?.find((loop) => loop.endQuestionId === questionId);
+};
+
+export const getRepeatLoopExitQuestionId = (form: FormSchemaV0, loop: FormRepeatLoop) => {
+  return normalizeNextQuestionId(
+    form,
+    loop.exitQuestionId ?? getSequentialRawNextId(form, loop.endQuestionId)
+  );
 };
 
 const getSequentialRawNextId = (form: FormSchemaV0, questionId: number) => {
@@ -48,7 +127,7 @@ const normalizeNextQuestionId = (form: FormSchemaV0, rawNextId: number | null): 
       return null;
     }
 
-    if (isAnswerableQuestion(nextQuestion)) {
+    if (isFlowQuestion(nextQuestion)) {
       return currentId;
     }
 
@@ -60,6 +139,11 @@ const normalizeNextQuestionId = (form: FormSchemaV0, rawNextId: number | null): 
 
 export const getFirstAnswerableQuestionId = (form: FormSchemaV0) => {
   const firstQuestion = form.questions.find(isAnswerableQuestion);
+  return firstQuestion?.id ?? null;
+};
+
+export const getFirstFlowQuestionId = (form: FormSchemaV0) => {
+  const firstQuestion = form.questions.find(isFlowQuestion);
   return firstQuestion?.id ?? null;
 };
 
@@ -90,9 +174,17 @@ export const inferQuestionAnswerType = (
 
 const normalizeString = (value: string) => value.trim();
 
+const isOtherAnswer = (value: string) => {
+  const normalized = normalizeString(value);
+  return normalized === 'Other' || normalized.startsWith('Other:');
+};
+
+const normalizeChoiceForBranching = (value: string) => (isOtherAnswer(value) ? 'Other' : value);
+
 const parseMultipleAnswer = (rawAnswer: string) => {
+  const separator = rawAnswer.includes('\n') ? '\n' : ',';
   return rawAnswer
-    .split(',')
+    .split(separator)
     .map((item) => item.trim())
     .filter(Boolean);
 };
@@ -109,11 +201,11 @@ export const parseStoredAnswerForQuestion = (
   }
 
   if (answerType === 'multiple') {
-    const selections = parseMultipleAnswer(normalized);
     if (question.settings?.multipleSelection) {
+      const selections = parseMultipleAnswer(normalized).map(normalizeChoiceForBranching);
       return selections;
     }
-    return selections[0] ?? normalized;
+    return normalizeChoiceForBranching(normalized);
   }
 
   return normalized;
@@ -144,7 +236,8 @@ const compareNumberValue = (
   expected: string | number | boolean | undefined,
   operator: NonNullable<FormBranchCondition['when']['operator']>
 ) => {
-  const actualNumber = Number(actual);
+  const numericMatch = actual.trim().match(/^-?\d+(?:\.\d+)?/);
+  const actualNumber = numericMatch ? Number(numericMatch[0]) : Number.NaN;
   const expectedNumber = Number(expected);
   if (!Number.isFinite(actualNumber)) return false;
 
@@ -166,14 +259,15 @@ const compareArrayValue = (
   expected: string | number | boolean | undefined,
   operator: NonNullable<FormBranchCondition['when']['operator']>
 ) => {
+  const normalizedActual = actual.map(normalizeChoiceForBranching);
   const normalizedExpected = String(expected ?? '').trim();
 
-  if (operator === 'contains') return actual.includes(normalizedExpected);
-  if (operator === 'not_contains') return !actual.includes(normalizedExpected);
-  if (operator === 'equals') return actual.length === 1 && actual[0] === normalizedExpected;
-  if (operator === 'not_equals') return !(actual.length === 1 && actual[0] === normalizedExpected);
-  if (operator === 'is_empty') return actual.length === 0;
-  if (operator === 'not_empty') return actual.length > 0;
+  if (operator === 'contains') return normalizedActual.includes(normalizedExpected);
+  if (operator === 'not_contains') return !normalizedActual.includes(normalizedExpected);
+  if (operator === 'equals') return normalizedActual.length === 1 && normalizedActual[0] === normalizedExpected;
+  if (operator === 'not_equals') return !(normalizedActual.length === 1 && normalizedActual[0] === normalizedExpected);
+  if (operator === 'is_empty') return normalizedActual.length === 0;
+  if (operator === 'not_empty') return normalizedActual.length > 0;
   return false;
 };
 
@@ -213,6 +307,9 @@ export const evaluateBranchCondition = (
   const answerType = inferQuestionAnswerType(question);
   if (answerType === 'number') {
     return compareNumberValue(answer, condition.when.value, operator);
+  }
+  if (answerType === 'multiple') {
+    return compareStringValue(normalizeChoiceForBranching(answer), condition.when.value, operator);
   }
 
   return compareStringValue(answer, condition.when.value, operator);
