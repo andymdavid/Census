@@ -17,6 +17,8 @@ const categoryForStepKind = (kind: AiFormStep['kind']) => {
       return 'Welcome Screen';
     case 'end':
       return 'End Screen';
+    case 'details':
+      return 'Details Screen';
     case 'group':
       return 'Question Group';
     case 'multiple':
@@ -38,7 +40,7 @@ const categoryForStepKind = (kind: AiFormStep['kind']) => {
 const settingsForStep = (step: AiFormStep): FormQuestionSettings => {
   const base: FormQuestionSettings = {};
 
-  if (step.kind === 'welcome' || step.kind === 'end' || step.kind === 'group') {
+  if (step.kind === 'welcome' || step.kind === 'end' || step.kind === 'group' || step.kind === 'details') {
     base.kind = step.kind;
   } else {
     base.answerType = step.kind;
@@ -145,7 +147,7 @@ export const compileAiFormSpec = (
   const questions: FormQuestion[] = spec.steps.map((step) => ({
     id: stepIdByRef.get(step.stepRef)!,
     text: step.title,
-    weight: step.weight ?? (step.kind === 'welcome' || step.kind === 'end' || step.kind === 'group' ? 0 : 1),
+    weight: step.weight ?? (step.kind === 'welcome' || step.kind === 'end' || step.kind === 'group' || step.kind === 'details' ? 0 : 1),
     category: categoryForStepKind(step.kind),
     settings: settingsForStep(step),
     branching: branchingForStep(step, stepIdByRef),
@@ -156,6 +158,9 @@ export const compileAiFormSpec = (
     id: options?.formId ?? defaultFormIdFromTitle(spec.title),
     title: spec.title,
     description: spec.description,
+    scoringEnabled: spec.results.some(
+      (result) => result.minScore !== undefined || result.maxScore !== undefined
+    ),
     questions,
     results: spec.results.map((result) => ({
       label: result.label,

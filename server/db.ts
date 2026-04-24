@@ -60,6 +60,20 @@ db.exec(`
 `);
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS organization_settings (
+    organization_id TEXT PRIMARY KEY,
+    ai_enabled INTEGER NOT NULL DEFAULT 1,
+    ai_default_model TEXT,
+    brand_logo_url TEXT,
+    brand_primary_color TEXT,
+    brand_background_color TEXT,
+    brand_text_color TEXT,
+    updated_at INTEGER NOT NULL,
+    updated_by TEXT
+  );
+`);
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS organization_members (
     organization_id TEXT NOT NULL,
     pubkey TEXT NOT NULL,
@@ -89,6 +103,15 @@ db.exec(`
     response_id TEXT NOT NULL,
     question_id TEXT NOT NULL,
     answer TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS draft_reset_tokens (
+    form_id TEXT NOT NULL,
+    response_id TEXT NOT NULL,
+    draft_token TEXT NOT NULL,
     created_at INTEGER NOT NULL
   );
 `);

@@ -1,4 +1,7 @@
 import {
+  addOrganizationMember,
+} from '../services/organizationService';
+import {
   createWorkspace,
   deleteWorkspace,
   getWorkspaceById,
@@ -158,6 +161,11 @@ export const handleWorkspacesRoutes = async (request: Request) => {
     if (!normalized) {
       return jsonResponse({ error: 'Invalid pubkey.' }, { status: 400 });
     }
+    const workspace = getWorkspaceById(workspaceId);
+    if (!workspace) {
+      return jsonResponse({ error: 'Not found' }, { status: 404 });
+    }
+    addOrganizationMember(workspace.organization_id, normalized);
     const members = addWorkspaceMember(workspaceId, normalized);
     return jsonResponse({ members });
   }

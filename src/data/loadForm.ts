@@ -1,9 +1,9 @@
 import aiDisruptionForm from './forms/ai-disruption.json';
 import { FormSchemaV0, LoadedFormSchema } from '../types/formSchema';
+import { getTotalScore } from '../../shared/formFlow';
 
 const toLoadedForm = (form: FormSchemaV0): LoadedFormSchema => {
-  const totalScore = form.questions.reduce((sum, question) => sum + question.weight, 0);
-  return { ...form, totalScore };
+  return { ...form, totalScore: getTotalScore(form) };
 };
 
 export const loadForm = (): LoadedFormSchema => {

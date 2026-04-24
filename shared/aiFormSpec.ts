@@ -9,6 +9,7 @@ export type AiAnswerType =
   | 'date'
   | 'welcome'
   | 'end'
+  | 'details'
   | 'group';
 
 export interface AiFormBranchCondition {
@@ -72,6 +73,7 @@ const VALID_STEP_KINDS = new Set<AiAnswerType>([
   'date',
   'welcome',
   'end',
+  'details',
   'group',
 ]);
 
@@ -83,7 +85,7 @@ const VALID_THEME_KEYS = new Set<keyof FormTheme>([
   'logoUrl',
 ]);
 
-const NON_QUESTION_KINDS = new Set<AiAnswerType>(['welcome', 'end', 'group']);
+const NON_QUESTION_KINDS = new Set<AiAnswerType>(['welcome', 'end', 'group', 'details']);
 
 const isObject = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null;

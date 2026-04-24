@@ -1,7 +1,8 @@
 import { generateAiFormSpecFromBrief } from '../services/aiFormGenerationService';
 import { createForm } from '../services/formsService';
+import { getOrganizationSettings } from '../services/organizationService';
 import { getSessionFromRequest } from '../services/sessionService';
-import { isWorkspaceMember } from '../services/workspaceService';
+import { getWorkspaceById, isWorkspaceMember } from '../services/workspaceService';
 
 const jsonResponse = (data: unknown, init: ResponseInit = {}) => {
   return new Response(JSON.stringify(data), {
@@ -30,8 +31,25 @@ export const handleAiRoutes = async (request: Request) => {
   const url = new URL(request.url);
   const path = url.pathname;
 
+  const resolveOrganizationAiModel = (workspaceId?: string | null) => {
+    const resolvedWorkspaceId = workspaceId?.trim();
+    if (!resolvedWorkspaceId) return null;
+    if (!isWorkspaceMember(resolvedWorkspaceId, session.pubkey)) {
+      return { error: jsonResponse({ error: 'Not found.' }, { status: 404 }) };
+    }
+    const workspace = getWorkspaceById(resolvedWorkspaceId);
+    if (!workspace?.organization_id) {
+      return null;
+    }
+    const settings = getOrganizationSettings(workspace.organization_id);
+    if (settings.ai_enabled !== 1) {
+      return { error: jsonResponse({ error: 'AI generation is disabled for this organisation.' }, { status: 403 }) };
+    }
+    return { model: settings.ai_default_model };
+  };
+
   if (request.method === 'POST' && path === '/api/ai/forms/spec') {
-    const payload = await readJson<{ brief?: string; model?: string }>(request);
+    const payload = await readJson<{ brief?: string; model?: string; workspaceId?: string }>(request);
     const brief = payload?.brief?.trim() ?? '';
 
     if (!brief) {
@@ -39,9 +57,13 @@ export const handleAiRoutes = async (request: Request) => {
     }
 
     try {
+      const organizationModel = resolveOrganizationAiModel(payload?.workspaceId);
+      if (organizationModel?.error) {
+        return organizationModel.error;
+      }
       const generated = await generateAiFormSpecFromBrief({
         brief,
-        model: payload?.model,
+        model: payload?.model?.trim() || organizationModel?.model || undefined,
       });
 
       return jsonResponse(generated);
@@ -71,9 +93,13 @@ export const handleAiRoutes = async (request: Request) => {
     }
 
     try {
+      const organizationModel = resolveOrganizationAiModel(workspaceId);
+      if (organizationModel?.error) {
+        return organizationModel.error;
+      }
       const generated = await generateAiFormSpecFromBrief({
         brief,
-        model: payload?.model,
+        model: payload?.model?.trim() || organizationModel?.model || undefined,
       });
       const created = createForm({
         title: generated.schema.title,

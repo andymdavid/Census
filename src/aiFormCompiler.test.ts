@@ -237,4 +237,40 @@ describe('aiFormCompiler', () => {
       },
     });
   });
+
+  it('compiles details steps into non-answer content screens', () => {
+    const { schema, errors } = compileAiFormSpec(
+      createSpec({
+        steps: [
+          {
+            stepRef: 'details',
+            title: 'Before you begin',
+            kind: 'details',
+            description: 'Read this context before answering.',
+            buttonLabel: 'Continue',
+            weight: 0,
+            defaultGoToStepRef: 'q1',
+          },
+          {
+            stepRef: 'q1',
+            title: 'Ready?',
+            kind: 'yesno',
+            weight: 1,
+          },
+        ],
+      })
+    );
+
+    expect(errors).toEqual([]);
+    expect(schema?.questions[0]).toMatchObject({
+      category: 'Details Screen',
+      settings: {
+        kind: 'details',
+        description: 'Read this context before answering.',
+        buttonLabel: 'Continue',
+      },
+      branching: { next: 2 },
+      weight: 0,
+    });
+  });
 });

@@ -30,8 +30,36 @@ interface WorkspaceItem {
 interface OrganizationItem {
   id: string;
   name: string;
+  role?: string;
   created_at: number;
   updated_at: number;
+}
+
+interface MemberProfile {
+  name: string | null;
+  picture: string | null;
+}
+
+interface OrganizationSettingsData {
+  aiEnabled: boolean;
+  aiDefaultModel: string | null;
+  brandLogoUrl: string | null;
+  brandPrimaryColor: string | null;
+  brandBackgroundColor: string | null;
+  brandTextColor: string | null;
+  updatedAt: number;
+  updatedBy: string | null;
+}
+
+interface OrganizationSettingsResponse {
+  organization: {
+    id: string;
+    name: string;
+  };
+  settings: OrganizationSettingsData;
+  integrations: {
+    openRouterConfigured: boolean;
+  };
 }
 
 const Forms: React.FC = () => {
@@ -58,6 +86,16 @@ const Forms: React.FC = () => {
   const [workspaceMembers, setWorkspaceMembers] = useState<
     Array<{ pubkey: string; role: string; created_at: number }>
   >([]);
+  const [workspaceMembersLoading, setWorkspaceMembersLoading] = useState(false);
+  const [workspaceMembersError, setWorkspaceMembersError] = useState<string | null>(null);
+  const [orgInviteOpen, setOrgInviteOpen] = useState(false);
+  const [orgInviteValue, setOrgInviteValue] = useState('');
+  const [organizationMembers, setOrganizationMembers] = useState<
+    Array<{ pubkey: string; role: string; created_at: number }>
+  >([]);
+  const [organizationMembersLoading, setOrganizationMembersLoading] = useState(false);
+  const [organizationMembersError, setOrganizationMembersError] = useState<string | null>(null);
+  const [memberProfiles, setMemberProfiles] = useState<Record<string, MemberProfile>>({});
   const [profileName, setProfileName] = useState<string | null>(null);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -65,8 +103,20 @@ const Forms: React.FC = () => {
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null);
   const [orgMenuOpen, setOrgMenuOpen] = useState(false);
   const [orgModalOpen, setOrgModalOpen] = useState(false);
+  const [adminSettingsOpen, setAdminSettingsOpen] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [orgError, setOrgError] = useState<string | null>(null);
+  const [adminSettingsLoading, setAdminSettingsLoading] = useState(false);
+  const [adminSettingsError, setAdminSettingsError] = useState<string | null>(null);
+  const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
+  const [adminOrganizationName, setAdminOrganizationName] = useState('');
+  const [adminAiEnabled, setAdminAiEnabled] = useState(true);
+  const [adminAiDefaultModel, setAdminAiDefaultModel] = useState('');
+  const [adminBrandLogoUrl, setAdminBrandLogoUrl] = useState('');
+  const [adminBrandPrimaryColor, setAdminBrandPrimaryColor] = useState('#4f46e5');
+  const [adminBrandBackgroundColor, setAdminBrandBackgroundColor] = useState('#f5f6fa');
+  const [adminBrandTextColor, setAdminBrandTextColor] = useState('#1f2937');
+  const [openRouterConfigured, setOpenRouterConfigured] = useState(false);
   const [deleteFormTarget, setDeleteFormTarget] = useState<FormListItem | null>(null);
 
   const readApiError = async (response: Response, fallback: string) => {
@@ -312,18 +362,114 @@ const Forms: React.FC = () => {
     loadWorkspaceMembers(activeWorkspaceId);
   }, [inviteOpen, activeWorkspaceId]);
 
+  useEffect(() => {
+    const activeOrganizationRole = organizations.find((org) => org.id === activeOrganizationId)?.role;
+    const effectiveOrganizationMembers =
+      pubkey &&
+      activeOrganizationRole &&
+      !organizationMembers.some((member) => member.pubkey === pubkey)
+        ? [
+            {
+              pubkey,
+              role: activeOrganizationRole,
+              created_at: Date.now(),
+            },
+            ...organizationMembers,
+          ]
+        : organizationMembers;
+    const visibleMemberPubkeys = Array.from(
+      new Set(
+        [...workspaceMembers, ...effectiveOrganizationMembers]
+          .map((member) => member.pubkey)
+          .filter(Boolean)
+      )
+    );
+    const unresolved = visibleMemberPubkeys.filter((memberPubkey) => !memberProfiles[memberPubkey]);
+    if (unresolved.length === 0) return;
+    let isActive = true;
+    const pool = new SimplePool();
+    const relays = ['wss://relay.damus.io', 'wss://relay.nostr.band', 'wss://nos.lol'];
+    (async () => {
+      try {
+        const events = await Promise.all(
+          unresolved.map((memberPubkey) =>
+            pool.get(relays, { kinds: [0], authors: [memberPubkey] }, { maxWait: 4000 })
+          )
+        );
+        if (!isActive) return;
+        const nextProfiles: Record<string, MemberProfile> = {};
+        unresolved.forEach((memberPubkey, index) => {
+          const event = events[index];
+          if (!event?.content) {
+            nextProfiles[memberPubkey] = { name: null, picture: null };
+            return;
+          }
+          try {
+            const metadata = JSON.parse(event.content) as {
+              name?: string;
+              display_name?: string;
+              picture?: string;
+            };
+            nextProfiles[memberPubkey] = {
+              name: metadata.display_name || metadata.name || null,
+              picture: metadata.picture || null,
+            };
+          } catch {
+            nextProfiles[memberPubkey] = { name: null, picture: null };
+          }
+        });
+        setMemberProfiles((prev) => ({ ...prev, ...nextProfiles }));
+      } finally {
+        pool.close(relays);
+      }
+    })();
+    return () => {
+      isActive = false;
+      pool.close(relays);
+    };
+  }, [activeOrganizationId, memberProfiles, organizationMembers, organizations, pubkey, workspaceMembers]);
+
+  useEffect(() => {
+    if (!orgInviteOpen || !activeOrganizationId) return;
+    void loadOrganizationMembers(activeOrganizationId);
+  }, [orgInviteOpen, activeOrganizationId]);
+
   const loadWorkspaceMembers = async (workspaceId: string) => {
+    setWorkspaceMembersLoading(true);
+    setWorkspaceMembersError(null);
     const response = await fetch(`/api/workspaces/${workspaceId}/members`, {
       credentials: 'include',
     });
     if (!response.ok) {
-      setError(await readApiError(response, 'Unable to load workspace members.'));
+      setWorkspaceMembersError(await readApiError(response, 'Unable to load workspace members.'));
+      setWorkspaceMembersLoading(false);
       return;
     }
     const data = (await response.json()) as {
       members?: Array<{ pubkey: string; role: string; created_at: number }>;
     };
     setWorkspaceMembers(data.members ?? []);
+    setWorkspaceMembersLoading(false);
+  };
+
+  const loadOrganizationMembers = async (organizationId: string) => {
+    setOrganizationMembersLoading(true);
+    setOrganizationMembersError(null);
+    const response = await fetch(`/api/organizations/${organizationId}/members`, {
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      setOrganizationMembersError(
+        await readApiError(response, 'Unable to load organisation members.')
+      );
+      setOrganizationMembersLoading(false);
+      return;
+    }
+    const data = (await response.json()) as {
+      members?: Array<{ pubkey: string; role: string; created_at: number }>;
+    };
+    setOrganizationMembers(data.members ?? []);
+    setOrganizationMembersLoading(false);
   };
 
   const handleInvite = async () => {
@@ -338,7 +484,7 @@ const Forms: React.FC = () => {
       body: JSON.stringify({ pubkey: payload }),
     });
     if (!response.ok) {
-      setError(await readApiError(response, 'Unable to invite workspace member.'));
+      setWorkspaceMembersError(await readApiError(response, 'Unable to invite workspace member.'));
       return;
     }
     const data = (await response.json()) as {
@@ -346,6 +492,112 @@ const Forms: React.FC = () => {
     };
     setWorkspaceMembers(data.members ?? []);
     setInviteValue('');
+  };
+
+  const handleOrganizationInvite = async () => {
+    if (!activeOrganizationId) return;
+    const payload = orgInviteValue.trim();
+    if (!payload) return;
+    setError(null);
+    const response = await fetch(`/api/organizations/${activeOrganizationId}/invite`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pubkey: payload }),
+    });
+    if (!response.ok) {
+      setOrganizationMembersError(
+        await readApiError(response, 'Unable to invite organisation member.')
+      );
+      return;
+    }
+    const data = (await response.json()) as {
+      members?: Array<{ pubkey: string; role: string; created_at: number }>;
+    };
+    setOrganizationMembers(data.members ?? []);
+    setOrgInviteValue('');
+  };
+
+  const openOrganizationMembers = () => {
+    setOrgInviteOpen(true);
+    setOrganizationMembers([]);
+    setOrganizationMembersError(null);
+    if (activeOrganizationId) {
+      void loadOrganizationMembers(activeOrganizationId);
+    }
+  };
+
+  const openAdminSettings = async () => {
+    if (!activeOrganizationId) return;
+    setAdminSettingsOpen(true);
+    setAdminSettingsLoading(true);
+    setAdminSettingsError(null);
+    try {
+      const response = await fetch(`/api/organizations/${activeOrganizationId}/settings`, {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error(await readApiError(response, 'Unable to load admin settings.'));
+      }
+      const data = (await response.json()) as OrganizationSettingsResponse;
+      setAdminOrganizationName(data.organization.name);
+      setAdminAiEnabled(data.settings.aiEnabled);
+      setAdminAiDefaultModel(data.settings.aiDefaultModel ?? '');
+      setAdminBrandLogoUrl(data.settings.brandLogoUrl ?? '');
+      setAdminBrandPrimaryColor(data.settings.brandPrimaryColor ?? '#4f46e5');
+      setAdminBrandBackgroundColor(data.settings.brandBackgroundColor ?? '#f5f6fa');
+      setAdminBrandTextColor(data.settings.brandTextColor ?? '#1f2937');
+      setOpenRouterConfigured(data.integrations.openRouterConfigured);
+    } catch (err) {
+      setAdminSettingsError(err instanceof Error ? err.message : 'Unable to load admin settings.');
+    } finally {
+      setAdminSettingsLoading(false);
+    }
+  };
+
+  const handleSaveAdminSettings = async () => {
+    if (!activeOrganizationId) return;
+    setAdminSettingsSaving(true);
+    setAdminSettingsError(null);
+    try {
+      const response = await fetch(`/api/organizations/${activeOrganizationId}/settings`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: adminOrganizationName,
+          aiEnabled: adminAiEnabled,
+          aiDefaultModel: adminAiDefaultModel,
+          brandLogoUrl: adminBrandLogoUrl,
+          brandPrimaryColor: adminBrandPrimaryColor,
+          brandBackgroundColor: adminBrandBackgroundColor,
+          brandTextColor: adminBrandTextColor,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(await readApiError(response, 'Unable to save admin settings.'));
+      }
+      const data = (await response.json()) as OrganizationSettingsResponse;
+      setOrganizations((prev) =>
+        prev.map((organization) =>
+          organization.id === activeOrganizationId
+            ? { ...organization, name: data.organization.name }
+            : organization
+        )
+      );
+      setAdminOrganizationName(data.organization.name);
+      setAdminAiEnabled(data.settings.aiEnabled);
+      setAdminAiDefaultModel(data.settings.aiDefaultModel ?? '');
+      setAdminBrandLogoUrl(data.settings.brandLogoUrl ?? '');
+      setAdminBrandPrimaryColor(data.settings.brandPrimaryColor ?? '#4f46e5');
+      setAdminBrandBackgroundColor(data.settings.brandBackgroundColor ?? '#f5f6fa');
+      setAdminBrandTextColor(data.settings.brandTextColor ?? '#1f2937');
+      setOpenRouterConfigured(data.integrations.openRouterConfigured);
+    } catch (err) {
+      setAdminSettingsError(err instanceof Error ? err.message : 'Unable to save admin settings.');
+    } finally {
+      setAdminSettingsSaving(false);
+    }
   };
 
   const handleCreateOrganization = async () => {
@@ -369,6 +621,7 @@ const Forms: React.FC = () => {
       const newOrg: OrganizationItem = {
         id: data.id,
         name: trimmed,
+        role: 'owner',
         created_at: Date.now(),
         updated_at: Date.now(),
       };
@@ -388,6 +641,23 @@ const Forms: React.FC = () => {
   const isWorkspaceOwner = activeWorkspaceRole === 'owner';
   const activeOrganization = organizations.find((org) => org.id === activeOrganizationId);
   const organizationLabel = activeOrganization?.name ?? 'Add new organisation';
+  const isOrganizationOwner = activeOrganization?.role === 'owner';
+  const visibleOrganizationMembers = useMemo(() => {
+    if (!pubkey || !activeOrganization?.role) {
+      return organizationMembers;
+    }
+    if (organizationMembers.some((member) => member.pubkey === pubkey)) {
+      return organizationMembers;
+    }
+    return [
+      {
+        pubkey,
+        role: activeOrganization.role,
+        created_at: Date.now(),
+      },
+      ...organizationMembers,
+    ];
+  }, [activeOrganization?.role, organizationMembers, pubkey]);
   const shortNpub = npub ? `${npub.slice(0, 10)}…${npub.slice(-4)}` : null;
 
   const handleCopyNpub = async () => {
@@ -738,12 +1008,24 @@ const Forms: React.FC = () => {
                       </DropdownMenu.Item>
                       <DropdownMenu.Separator className="h-px bg-gray-100" />
                       <DropdownMenu.Item
-                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                        className={`px-4 py-2 text-sm ${
+                          isOrganizationOwner
+                            ? 'text-gray-700 hover:bg-gray-100 cursor-pointer'
+                            : 'text-gray-400 cursor-not-allowed'
+                        }`}
+                        onSelect={(event) => {
+                          if (!isOrganizationOwner) {
+                            event.preventDefault();
+                            return;
+                          }
+                          void openAdminSettings();
+                        }}
                       >
                         Admin settings
                       </DropdownMenu.Item>
                       <DropdownMenu.Item
                         className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                        onSelect={openOrganizationMembers}
                       >
                         Organisation members
                       </DropdownMenu.Item>
@@ -1154,22 +1436,37 @@ const Forms: React.FC = () => {
                 <span>{workspaceMembers.length}</span>
               </div>
               <div className="divide-y divide-gray-100">
-                {workspaceMembers.map((member) => {
+                {workspaceMembersLoading && (
+                  <div className="px-4 py-4 text-sm text-gray-500">Loading members...</div>
+                )}
+                {workspaceMembersError && (
+                  <div className="px-4 py-4 text-sm text-red-600">{workspaceMembersError}</div>
+                )}
+                {!workspaceMembersLoading &&
+                  !workspaceMembersError &&
+                  workspaceMembers.map((member) => {
                   const npub =
                     member.pubkey && member.pubkey.length === 64
                       ? nip19.npubEncode(member.pubkey)
                       : member.pubkey;
                   const shortNpub = npub ? `${npub.slice(0, 10)}…${npub.slice(-4)}` : 'Unknown';
+                  const profile = memberProfiles[member.pubkey];
+                  const label = profile?.name || shortNpub;
                   return (
                     <div key={member.pubkey} className="px-4 py-3 flex items-center justify-between">
-                      <div className="text-sm text-gray-700">{shortNpub}</div>
+                      <div>
+                        <div className="text-sm text-gray-700">{label}</div>
+                        {profile?.name && (
+                          <div className="text-xs text-gray-400 mt-0.5">{shortNpub}</div>
+                        )}
+                      </div>
                       <div className="text-xs text-gray-400 uppercase tracking-wide">
                         {member.role}
                       </div>
                     </div>
                   );
                 })}
-                {workspaceMembers.length === 0 && (
+                {!workspaceMembersLoading && !workspaceMembersError && workspaceMembers.length === 0 && (
                   <div className="px-4 py-4 text-sm text-gray-500">No members yet.</div>
                 )}
               </div>
@@ -1179,6 +1476,292 @@ const Forms: React.FC = () => {
               <Dialog.Close className="text-sm text-gray-600 hover:text-gray-800">
                 Close
               </Dialog.Close>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={orgInviteOpen} onOpenChange={setOrgInviteOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-8 shadow-2xl focus:outline-none">
+            <div className="flex items-start justify-between">
+              <div>
+                <Dialog.Title className="text-xl font-semibold text-gray-900">
+                  Organisation members
+                </Dialog.Title>
+                <Dialog.Description className="text-sm text-gray-500 mt-2">
+                  Manage members for {organizationLabel}.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close className="text-sm text-gray-500 hover:text-gray-800 px-2 py-1">
+                ✕
+              </Dialog.Close>
+            </div>
+
+            <div className="mt-6">
+              <label className="text-xs uppercase tracking-wide text-gray-400">
+                Nostr npub or pubkey
+              </label>
+              <div className="mt-2 flex items-center gap-3">
+                <input
+                  type="text"
+                  value={orgInviteValue}
+                  onChange={(event) => setOrgInviteValue(event.target.value)}
+                  placeholder="npub1... or 64-char pubkey"
+                  className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  disabled={!isOrganizationOwner}
+                />
+                <button
+                  type="button"
+                  className="h-[40px] px-4 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={handleOrganizationInvite}
+                  disabled={!isOrganizationOwner}
+                >
+                  Invite
+                </button>
+              </div>
+              {!isOrganizationOwner && (
+                <div className="mt-2 text-xs text-gray-500">
+                  Only organisation owners can invite members.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 border border-gray-200 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-gray-50 text-xs uppercase tracking-wide text-gray-400">
+                <span>Members</span>
+                <span>{visibleOrganizationMembers.length}</span>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {organizationMembersLoading && (
+                  <div className="px-4 py-4 text-sm text-gray-500">Loading members...</div>
+                )}
+                {organizationMembersError && (
+                  <div className="px-4 py-4 text-sm text-red-600">{organizationMembersError}</div>
+                )}
+                {!organizationMembersLoading &&
+                  !organizationMembersError &&
+                  visibleOrganizationMembers.map((member) => {
+                  const npub =
+                    member.pubkey && member.pubkey.length === 64
+                      ? nip19.npubEncode(member.pubkey)
+                      : member.pubkey;
+                  const shortNpub = npub ? `${npub.slice(0, 10)}…${npub.slice(-4)}` : 'Unknown';
+                  const profile = memberProfiles[member.pubkey];
+                  const label = profile?.name || shortNpub;
+                  return (
+                    <div key={member.pubkey} className="px-4 py-3 flex items-center justify-between">
+                      <div>
+                        <div className="text-sm text-gray-700">{label}</div>
+                        {profile?.name && (
+                          <div className="text-xs text-gray-400 mt-0.5">{shortNpub}</div>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-400 uppercase tracking-wide">
+                        {member.role}
+                      </div>
+                    </div>
+                  );
+                })}
+                {!organizationMembersLoading &&
+                  !organizationMembersError &&
+                  visibleOrganizationMembers.length === 0 && (
+                  <div className="px-4 py-4 text-sm text-gray-500">No members yet.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <Dialog.Close className="text-sm text-gray-600 hover:text-gray-800">
+                Close
+              </Dialog.Close>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={adminSettingsOpen} onOpenChange={setAdminSettingsOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl focus:outline-none sm:p-8">
+            <div className="flex items-start justify-between">
+              <div>
+                <Dialog.Title className="text-xl font-semibold text-gray-900">
+                  Admin settings
+                </Dialog.Title>
+                <Dialog.Description className="mt-2 text-sm text-gray-500">
+                  Manage organisation-level AI defaults and branding without exposing secrets.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close className="px-2 py-1 text-sm text-gray-500 hover:text-gray-800">
+                ✕
+              </Dialog.Close>
+            </div>
+
+            {adminSettingsLoading ? (
+              <div className="mt-8 text-sm text-gray-500">Loading admin settings...</div>
+            ) : (
+              <div className="mt-6 space-y-6">
+                {adminSettingsError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {adminSettingsError}
+                  </div>
+                )}
+
+                <div className="rounded-2xl border border-gray-200 p-5">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                    Organisation
+                  </h3>
+                  <div className="mt-4">
+                    <label className="text-xs uppercase tracking-wide text-gray-400">
+                      Organisation name
+                    </label>
+                    <input
+                      type="text"
+                      value={adminOrganizationName}
+                      onChange={(event) => setAdminOrganizationName(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      disabled={!isOrganizationOwner}
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                        AI settings
+                      </h3>
+                      <p className="mt-2 text-sm text-gray-500">
+                        Control whether AI generation is available and which default model Census uses.
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
+                        openRouterConfigured
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
+                      {openRouterConfigured ? 'OpenRouter connected' : 'OpenRouter not configured'}
+                    </span>
+                  </div>
+
+                  <div className="mt-5 flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
+                    <div>
+                      <div className="text-sm font-medium text-gray-800">Enable AI generation</div>
+                      <div className="mt-1 text-sm text-gray-500">
+                        Disable this to block AI form generation for this organisation.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => isOrganizationOwner && setAdminAiEnabled((current) => !current)}
+                      className={`inline-flex h-7 w-12 items-center rounded-full transition ${
+                        adminAiEnabled ? 'bg-indigo-600' : 'bg-gray-300'
+                      } ${isOrganizationOwner ? '' : 'cursor-not-allowed opacity-60'}`}
+                    >
+                      <span
+                        className={`ml-1 inline-block h-5 w-5 rounded-full bg-white transition ${
+                          adminAiEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="text-xs uppercase tracking-wide text-gray-400">
+                      Default AI model
+                    </label>
+                    <input
+                      type="text"
+                      value={adminAiDefaultModel}
+                      onChange={(event) => setAdminAiDefaultModel(event.target.value)}
+                      placeholder="openai/gpt-4.1-mini"
+                      className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      disabled={!isOrganizationOwner}
+                    />
+                    <div className="mt-2 text-xs text-gray-500">
+                      Secrets stay server-side. This only controls the default model name.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 p-5">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                    Branding defaults
+                  </h3>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Set organization-level defaults that can later be applied to forms.
+                  </p>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="md:col-span-2">
+                      <label className="text-xs uppercase tracking-wide text-gray-400">
+                        Logo URL
+                      </label>
+                      <input
+                        type="text"
+                        value={adminBrandLogoUrl}
+                        onChange={(event) => setAdminBrandLogoUrl(event.target.value)}
+                        placeholder="https://..."
+                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        disabled={!isOrganizationOwner}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase tracking-wide text-gray-400">
+                        Primary color
+                      </label>
+                      <input
+                        type="text"
+                        value={adminBrandPrimaryColor}
+                        onChange={(event) => setAdminBrandPrimaryColor(event.target.value)}
+                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        disabled={!isOrganizationOwner}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase tracking-wide text-gray-400">
+                        Background color
+                      </label>
+                      <input
+                        type="text"
+                        value={adminBrandBackgroundColor}
+                        onChange={(event) => setAdminBrandBackgroundColor(event.target.value)}
+                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        disabled={!isOrganizationOwner}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase tracking-wide text-gray-400">
+                        Text color
+                      </label>
+                      <input
+                        type="text"
+                        value={adminBrandTextColor}
+                        onChange={(event) => setAdminBrandTextColor(event.target.value)}
+                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        disabled={!isOrganizationOwner}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <Dialog.Close className="text-sm text-gray-600 hover:text-gray-800">
+                Close
+              </Dialog.Close>
+              <button
+                type="button"
+                className="rounded-xl bg-[#2f2b34] px-4 py-2 text-sm font-medium text-white hover:bg-[#27222a] disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => void handleSaveAdminSettings()}
+                disabled={!isOrganizationOwner || adminSettingsLoading || adminSettingsSaving}
+              >
+                {adminSettingsSaving ? 'Saving...' : 'Save settings'}
+              </button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
