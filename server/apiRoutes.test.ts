@@ -1503,6 +1503,11 @@ describe('API routes', () => {
     const owner = createOwnedWorkspaceContext();
     const invitedPubkey = createPubkey();
     const invitedSession = createSession(invitedPubkey);
+    const form = createForm({
+      title: 'Adapt Automation Audit',
+      schema: createValidSchema(),
+      workspaceId: owner.workspaceId,
+    });
 
     const inviteResponse = await handleWorkspacesRoutes(
       createAuthedRequest({
@@ -1539,5 +1544,17 @@ describe('API routes', () => {
       workspaces: Array<{ id: string }>;
     };
     expect(workspacesData.workspaces.map((workspace) => workspace.id)).toContain(owner.workspaceId);
+
+    const formsResponse = await handleFormsRoutes(
+      createAuthedRequest({
+        url: `http://localhost/api/forms?workspaceId=${owner.workspaceId}`,
+        sessionId: invitedSession.id,
+      })
+    );
+    expect(formsResponse.status).toBe(200);
+    const formsData = (await formsResponse.json()) as {
+      forms: Array<{ id: string }>;
+    };
+    expect(formsData.forms.map((entry) => entry.id)).toContain(form.id);
   });
 });

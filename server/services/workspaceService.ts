@@ -32,13 +32,16 @@ const selectWorkspacesForOrgAndUser = db.prepare(
   `
   SELECT w.id, w.name, w.organization_id, m.role, w.created_at, w.updated_at
   FROM workspaces w
-  INNER JOIN workspace_members m ON m.workspace_id = w.id
-  WHERE m.pubkey = ? AND w.organization_id = ?
+  LEFT JOIN workspace_members m ON m.workspace_id = w.id AND m.pubkey = ?
+  WHERE w.organization_id = ?
   ORDER BY w.created_at ASC
   `
 );
 const selectMembership = db.prepare(
   'SELECT workspace_id, pubkey, role FROM workspace_members WHERE workspace_id = ? AND pubkey = ?'
+);
+const selectOrganizationMembership = db.prepare(
+  'SELECT organization_id, pubkey, role FROM organization_members WHERE organization_id = ? AND pubkey = ?'
 );
 const selectMembers = db.prepare(
   'SELECT workspace_id, pubkey, role, created_at FROM workspace_members WHERE workspace_id = ? ORDER BY created_at ASC'
@@ -73,7 +76,18 @@ export const listWorkspacesForUser = (pubkey: string) => {
 };
 
 export const listWorkspacesForOrgAndUser = (organizationId: string, pubkey: string) => {
-  return selectWorkspacesForOrgAndUser.all(pubkey, organizationId) as WorkspaceRecord[];
+  const organizationMembership = selectOrganizationMembership.get(organizationId, pubkey) as
+    | { organization_id: string; pubkey: string; role: string }
+    | undefined;
+  if (!organizationMembership) {
+    return [];
+  }
+  return (selectWorkspacesForOrgAndUser.all(pubkey, organizationId) as WorkspaceRecord[]).map(
+    (workspace) => ({
+      ...workspace,
+      role: workspace.role ?? organizationMembership.role,
+    })
+  );
 };
 
 export const getWorkspaceById = (id: string) => {
@@ -100,17 +114,37 @@ export const ensureDefaultWorkspace = (pubkey: string, organizationId: string) =
 };
 
 export const isWorkspaceMember = (workspaceId: string, pubkey: string) => {
+  const workspace = getWorkspaceById(workspaceId);
+  if (!workspace?.organization_id) {
+    return false;
+  }
   const row = selectMembership.get(workspaceId, pubkey) as
     | { workspace_id: string; pubkey: string; role: string }
     | undefined;
-  return Boolean(row);
+  if (row) {
+    return true;
+  }
+  const organizationMembership = selectOrganizationMembership.get(workspace.organization_id, pubkey) as
+    | { organization_id: string; pubkey: string; role: string }
+    | undefined;
+  return Boolean(organizationMembership);
 };
 
 export const getWorkspaceMemberRole = (workspaceId: string, pubkey: string) => {
+  const workspace = getWorkspaceById(workspaceId);
+  if (!workspace?.organization_id) {
+    return null;
+  }
   const row = selectMembership.get(workspaceId, pubkey) as
     | { workspace_id: string; pubkey: string; role: string }
     | undefined;
-  return row?.role ?? null;
+  if (row?.role) {
+    return row.role;
+  }
+  const organizationMembership = selectOrganizationMembership.get(workspace.organization_id, pubkey) as
+    | { organization_id: string; pubkey: string; role: string }
+    | undefined;
+  return organizationMembership?.role ?? null;
 };
 
 export const renameWorkspace = (workspaceId: string, name: string) => {
