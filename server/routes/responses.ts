@@ -3,7 +3,7 @@ import { getAccessibleFormForUser } from '../services/formAccessService';
 import {
   createResponse,
   deleteResponse,
-  exportResponses,
+  exportReadableResponses,
   getDraftResumeState,
   getDraftRestoreStatus,
   getFunnelStats,
@@ -98,33 +98,43 @@ export const handleResponsesRoutes = async (request: Request) => {
     if (!session.pubkey || !getAccessibleFormForUser(formId, session.pubkey)) {
       return jsonResponse({ error: 'Form not found.' }, { status: 404 });
     }
-    const rows = exportResponses(formId);
+    const { schema, errors } = getValidatedFormSchema(formId);
+    if (!schema || errors.length > 0) {
+      return jsonResponse({ error: 'Form schema is invalid.', details: errors }, { status: 400 });
+    }
+    const rows = exportReadableResponses(formId, schema);
 
     const header = [
       'response_id',
-      'response_created_at',
+      'submitted_at',
+      'submitter_name',
+      'submitter_email',
+      'submitter_company',
       'score',
-      'meta_json',
+      'section',
+      'repeat_loop_label',
+      'repeat_instance_index',
+      'repeat_instance_title',
       'question_id',
+      'question',
       'answer',
-      'answer_created_at',
-      'lead_name',
-      'lead_email',
-      'lead_company',
     ];
 
     const body = rows.map((row) =>
       [
         row.response_id,
-        row.response_created_at,
+        row.submitted_at,
+        row.submitter_name,
+        row.submitter_email,
+        row.submitter_company,
         row.score,
-        row.meta_json,
+        row.section,
+        row.repeat_loop_label,
+        row.repeat_instance_index,
+        row.repeat_instance_title,
         row.question_id,
+        row.question,
         row.answer,
-        row.answer_created_at,
-        row.lead_name,
-        row.lead_email,
-        row.lead_company,
       ]
         .map(toCsvValue)
         .join(',')

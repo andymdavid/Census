@@ -1067,6 +1067,104 @@ describe('API routes', () => {
     expect(data.draft?.answers['2']).toBe(true);
   });
 
+  test('ignores a late draft autosave after the same draft token has already completed', async () => {
+    const owner = createOwnedWorkspaceContext();
+    const form = createForm({
+      title: 'Late Autosave Form',
+      workspaceId: owner.workspaceId,
+      schema: {
+        version: 'v0' as const,
+        id: 'late-autosave-form',
+        title: 'Late Autosave Form',
+        questions: [
+          {
+            id: 1,
+            text: 'Question 1',
+            weight: 0,
+            category: 'Short Text',
+            settings: { answerType: 'short' as const },
+          },
+        ],
+        results: [{ label: 'Default', description: 'Default result' }],
+      },
+    });
+
+    const draftToken = 'late-autosave-token';
+    const createDraftResponse = await handleResponsesRoutes(
+      createAuthedRequest({
+        url: `http://localhost/api/forms/${form.id}/responses`,
+        method: 'POST',
+        body: {
+          answers: [{ questionId: '1', answer: 'Draft answer' }],
+          score: 0,
+          completed: false,
+          meta: {
+            visitedQuestionIds: [1],
+            lastQuestionId: 1,
+            completed: false,
+            draftToken,
+          },
+        },
+      })
+    );
+    expect(createDraftResponse.status).toBe(200);
+    const created = (await createDraftResponse.json()) as { id: string };
+
+    const completeResponse = await handleResponsesRoutes(
+      createAuthedRequest({
+        url: `http://localhost/api/forms/${form.id}/responses`,
+        method: 'POST',
+        body: {
+          responseId: created.id,
+          answers: [{ questionId: '1', answer: 'Final answer' }],
+          score: 0,
+          completed: true,
+          meta: {
+            visitedQuestionIds: [1],
+            lastQuestionId: 1,
+            completed: true,
+            draftToken,
+          },
+        },
+      })
+    );
+    expect(completeResponse.status).toBe(200);
+
+    const lateDraftResponse = await handleResponsesRoutes(
+      createAuthedRequest({
+        url: `http://localhost/api/forms/${form.id}/responses`,
+        method: 'POST',
+        body: {
+          responseId: created.id,
+          answers: [{ questionId: '1', answer: 'Draft answer' }],
+          score: 0,
+          completed: false,
+          meta: {
+            visitedQuestionIds: [1],
+            lastQuestionId: 1,
+            completed: false,
+            draftToken,
+          },
+        },
+      })
+    );
+    expect(lateDraftResponse.status).toBe(200);
+    expect((await lateDraftResponse.json()) as { id: string }).toEqual({ id: created.id });
+
+    const reviewResponse = await handleResponsesRoutes(
+      createAuthedRequest({
+        url: `http://localhost/api/forms/${form.id}/responses/review?status=all`,
+        sessionId: owner.sessionId,
+      })
+    );
+    expect(reviewResponse.status).toBe(200);
+    const reviewData = (await reviewResponse.json()) as {
+      responses: Array<{ id: string; completed: boolean }>;
+    };
+    expect(reviewData.responses).toHaveLength(1);
+    expect(reviewData.responses[0]).toMatchObject({ id: created.id, completed: true });
+  });
+
   test('prefers the exact name question when inferring submitter name in review lists', async () => {
     const owner = createOwnedWorkspaceContext();
     const form = createForm({
@@ -1340,6 +1438,73 @@ describe('API routes', () => {
         answers: [{ questionId: 5, question: 'Process Name', answer: 'Invoice matching' }],
       },
     ]);
+  });
+
+  test('exports a human-readable CSV with submitter metadata and question text', async () => {
+    const owner = createOwnedWorkspaceContext();
+    const form = createForm({
+      title: 'Export Form',
+      workspaceId: owner.workspaceId,
+      schema: {
+        version: 'v0' as const,
+        id: 'export-form',
+        title: 'Export Form',
+        questions: [
+          {
+            id: 1,
+            text: "What's your name?",
+            weight: 0,
+            category: 'Text',
+            settings: { answerType: 'long' as const },
+          },
+          {
+            id: 2,
+            text: 'What is the process?',
+            weight: 0,
+            category: 'Text',
+            settings: { answerType: 'long' as const },
+          },
+        ],
+        results: [{ label: 'Default', description: 'Default result' }],
+      },
+    });
+
+    const createResponseResult = await handleResponsesRoutes(
+      createAuthedRequest({
+        url: `http://localhost/api/forms/${form.id}/responses`,
+        method: 'POST',
+        body: {
+          answers: [
+            { questionId: '1', answer: 'Andy' },
+            { questionId: '2', answer: 'LinkedIn campaign planning' },
+          ],
+          score: 0,
+          completed: true,
+          meta: {
+            visitedQuestionIds: [1, 2],
+            lastQuestionId: 2,
+            completed: true,
+          },
+        },
+      })
+    );
+    expect(createResponseResult.status).toBe(200);
+
+    const exportResponse = await handleResponsesRoutes(
+      createAuthedRequest({
+        url: `http://localhost/api/forms/${form.id}/responses/export`,
+        sessionId: owner.sessionId,
+      })
+    );
+    expect(exportResponse.status).toBe(200);
+    expect(exportResponse.headers.get('Content-Type')).toBe('text/csv');
+    const csv = await exportResponse.text();
+    expect(csv).toContain('submitter_name');
+    expect(csv).toContain('question');
+    expect(csv).toContain("What's your name?");
+    expect(csv).toContain('What is the process?');
+    expect(csv).toContain('Andy');
+    expect(csv).toContain('LinkedIn campaign planning');
   });
 
   test('deletes a completed response and removes it from review lists', async () => {

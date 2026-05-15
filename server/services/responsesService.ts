@@ -185,16 +185,47 @@ export const createResponse = (input: {
     ? (selectResponseById.get(requestedResponseId) as ResponseRecord | null)
     : null;
   const existing = existingRow ?? undefined;
+  let requestedDraftToken: string | null = null;
+  if (input.meta && typeof input.meta === 'object') {
+    const candidate = (input.meta as { draftToken?: unknown }).draftToken;
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      requestedDraftToken = candidate.trim();
+    }
+  }
+  let existingDraftToken: string | null = null;
+  if (existing?.meta_json) {
+    try {
+      const parsed = JSON.parse(existing.meta_json) as ResponsePathMeta;
+      if (typeof parsed.draftToken === 'string' && parsed.draftToken.trim().length > 0) {
+        existingDraftToken = parsed.draftToken.trim();
+      }
+    } catch {
+      existingDraftToken = null;
+    }
+  }
   const canUpdateExisting =
     existing !== undefined && existing.form_id === input.formId && existing.completed === 0;
+  const shouldIgnoreLateDraftWrite =
+    existing !== undefined &&
+    existing.form_id === input.formId &&
+    existing.completed === 1 &&
+    input.completed !== true &&
+    requestedDraftToken !== null &&
+    requestedDraftToken === existingDraftToken;
   const responseId =
     canUpdateExisting
       ? existing.id
+      : shouldIgnoreLateDraftWrite
+        ? existing.id
       : existing
         ? crypto.randomUUID()
         : requestedResponseId || crypto.randomUUID();
   const metaJson = input.meta ? JSON.stringify(input.meta) : null;
   const completed = input.completed ? 1 : 0;
+
+  if (shouldIgnoreLateDraftWrite) {
+    return { id: responseId, created_at: existing.created_at };
+  }
 
   db.transaction(() => {
     if (canUpdateExisting) {
@@ -303,17 +334,59 @@ export const getDraftResumeState = (
       answer: string;
       created_at: number;
     }>;
+    const answersByQuestionId = new Map<number, Array<boolean | string | string[]>>();
     const answerMap: Record<number, boolean | string | string[]> = {};
 
     for (const answer of answers) {
       const questionId = Number(answer.question_id);
       const question = schema.questions.find((item) => item.id === questionId);
       if (!question) continue;
-      answerMap[questionId] = parseStoredAnswerForQuestion(question, answer.answer) as
+      const parsedAnswer = parseStoredAnswerForQuestion(question, answer.answer) as
         | boolean
         | string
         | string[];
+      const existingAnswers = answersByQuestionId.get(questionId) ?? [];
+      existingAnswers.push(parsedAnswer);
+      answersByQuestionId.set(questionId, existingAnswers);
+      answerMap[questionId] = parsedAnswer;
     }
+
+    const repeatInstances: DraftResumeState['repeatInstances'] = {};
+    const activeLoopId =
+      schema.repeatLoops?.find((loop) => {
+        const startIndex = schema.questions.findIndex((item) => item.id === loop.startQuestionId);
+        const endIndex = schema.questions.findIndex((item) => item.id === loop.endQuestionId);
+        const currentIndex = schema.questions.findIndex((item) => item.id === meta?.lastQuestionId);
+        return startIndex !== -1 && endIndex !== -1 && currentIndex >= startIndex && currentIndex <= endIndex;
+      })?.id ?? null;
+
+    meta.repeatLoops?.forEach((loopMeta) => {
+      const instances = loopMeta.instances.map((instance, instanceIndex) => {
+        const instanceAnswers: Record<number, boolean | string | string[]> = {};
+        instance.questionIds.forEach((questionId) => {
+          const value = answersByQuestionId.get(questionId)?.[instanceIndex];
+          if (value !== undefined) {
+            instanceAnswers[questionId] = value;
+          }
+        });
+        return instanceAnswers;
+      });
+
+      if (instances.length === 0) {
+        return;
+      }
+
+      if (activeLoopId === loopMeta.loopId) {
+        const currentInstance = instances[instances.length - 1] ?? {};
+        Object.entries(currentInstance).forEach(([questionId, value]) => {
+          answerMap[Number(questionId)] = value as boolean | string | string[];
+        });
+        repeatInstances[loopMeta.loopId] = instances.slice(0, -1);
+        return;
+      }
+
+      repeatInstances[loopMeta.loopId] = instances;
+    });
 
     return {
       responseId: existing.id,
@@ -324,7 +397,7 @@ export const getDraftResumeState = (
         (questionId) => questionId !== meta?.lastQuestionId
       ),
       showWelcome: false,
-      repeatInstances: {},
+      repeatInstances,
       loopSummaryId: null,
     };
   }
@@ -360,6 +433,171 @@ export const exportResponses = (formId: string) => {
     lead_email: string | null;
     lead_company: string | null;
   }>;
+};
+
+export const exportReadableResponses = (formId: string, schema: FormSchemaV0) => {
+  const rows = exportResponses(formId);
+  const grouped = new Map<
+    string,
+    {
+      submittedAt: number;
+      score: number;
+      meta: ResponsePathMeta | null;
+      leadName: string | null;
+      leadEmail: string | null;
+      leadCompany: string | null;
+      answers: Array<{ question_id: string | null; answer: string | null }>;
+    }
+  >();
+
+  rows.forEach((row) => {
+    const existing = grouped.get(row.response_id) ?? {
+      submittedAt: row.response_created_at,
+      score: row.score,
+      meta: null as ResponsePathMeta | null,
+      leadName: row.lead_name,
+      leadEmail: row.lead_email,
+      leadCompany: row.lead_company,
+      answers: [],
+    };
+    if (existing.meta === null && row.meta_json) {
+      try {
+        existing.meta = JSON.parse(row.meta_json) as ResponsePathMeta;
+      } catch {
+        existing.meta = null;
+      }
+    }
+    existing.leadName = existing.leadName ?? row.lead_name;
+    existing.leadEmail = existing.leadEmail ?? row.lead_email;
+    existing.leadCompany = existing.leadCompany ?? row.lead_company;
+    if (row.question_id !== null && row.answer !== null) {
+      existing.answers.push({ question_id: row.question_id, answer: row.answer });
+    }
+    grouped.set(row.response_id, existing);
+  });
+
+  const csvRows: Array<{
+    response_id: string;
+    submitted_at: number;
+    submitter_name: string;
+    submitter_email: string | null;
+    submitter_company: string | null;
+    score: number;
+    section: string;
+    repeat_loop_label: string | null;
+    repeat_instance_index: number | null;
+    repeat_instance_title: string | null;
+    question_id: number | null;
+    question: string | null;
+    answer: string | null;
+  }> = [];
+
+  grouped.forEach((response, responseId) => {
+    const answersByQuestionId = new Map<number, string[]>();
+    response.answers.forEach((answer) => {
+      const questionId = Number(answer.question_id);
+      if (!Number.isInteger(questionId) || answer.answer === null) return;
+      answersByQuestionId.set(questionId, [...(answersByQuestionId.get(questionId) ?? []), answer.answer]);
+    });
+
+    const submitterName = inferSubmitterName(
+      schema,
+      response.answers
+        .filter((answer): answer is { question_id: string; answer: string } => !!answer.question_id && !!answer.answer),
+      response.leadName
+    );
+
+    const repeatedQuestionIds = new Set<number>();
+    response.meta?.repeatLoops?.forEach((loop) => {
+      loop.instances.forEach((instance) => {
+        instance.questionIds.forEach((questionId) => repeatedQuestionIds.add(questionId));
+      });
+    });
+
+    response.meta?.repeatLoops?.forEach((loopMeta) => {
+      const loop = schema.repeatLoops?.find((item) => item.id === loopMeta.loopId);
+      if (!loop) return;
+      const loopQuestions = schema.questions.filter((question) => {
+        const startIndex = schema.questions.findIndex((item) => item.id === loop.startQuestionId);
+        const endIndex = schema.questions.findIndex((item) => item.id === loop.endQuestionId);
+        const questionIndex = schema.questions.findIndex((item) => item.id === question.id);
+        return startIndex !== -1 && endIndex !== -1 && questionIndex >= startIndex && questionIndex <= endIndex;
+      });
+
+      loopMeta.instances.forEach((instance, instanceIndex) => {
+        loopQuestions.forEach((question) => {
+          if (!isAnswerableResponseQuestion(question)) return;
+          const answer = answersByQuestionId.get(question.id)?.[instanceIndex];
+          if (answer === undefined) return;
+          csvRows.push({
+            response_id: responseId,
+            submitted_at: response.submittedAt,
+            submitter_name: submitterName,
+            submitter_email: response.leadEmail,
+            submitter_company: response.leadCompany,
+            score: response.score,
+            section: instance.title || `${loopMeta.label} ${instance.index}`,
+            repeat_loop_label: loopMeta.label,
+            repeat_instance_index: instance.index,
+            repeat_instance_title: instance.title || null,
+            question_id: question.id,
+            question: question.text,
+            answer,
+          });
+        });
+      });
+    });
+
+    let currentSection = 'Answers';
+    for (const question of schema.questions) {
+      const kind = question.settings?.kind;
+      if (
+        kind === 'welcome' ||
+        kind === 'end' ||
+        question.category === 'Welcome Screen' ||
+        question.category === 'End Screen'
+      ) {
+        continue;
+      }
+
+      if (
+        kind === 'group' ||
+        question.category === 'Question Group' ||
+        kind === 'details' ||
+        question.category === 'Details Screen'
+      ) {
+        currentSection = question.text;
+        continue;
+      }
+
+      if (repeatedQuestionIds.has(question.id)) {
+        continue;
+      }
+
+      const answer = answersByQuestionId.get(question.id)?.[0];
+      if (answer === undefined) {
+        continue;
+      }
+
+      csvRows.push({
+        response_id: responseId,
+        submitted_at: response.submittedAt,
+        submitter_name: submitterName,
+        submitter_email: response.leadEmail,
+        submitter_company: response.leadCompany,
+        score: response.score,
+        section: currentSection,
+        repeat_loop_label: null,
+        repeat_instance_index: null,
+        repeat_instance_title: null,
+        question_id: question.id,
+        question: question.text,
+        answer,
+      });
+    }
+  });
+
+  return csvRows;
 };
 
 const preferredSubmitterNamePatterns = [
