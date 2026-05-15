@@ -111,6 +111,27 @@ describe('aiFormCompiler', () => {
     expect(schema?.id).toBe('ai-generated-form');
   });
 
+  it('compiles short text steps into text question settings', () => {
+    const { schema, errors } = compileAiFormSpec(
+      createSpec({
+        steps: [
+          {
+            stepRef: 'q1',
+            title: 'What is your name?',
+            kind: 'short',
+            weight: 1,
+          },
+        ],
+      })
+    );
+
+    expect(errors).toEqual([]);
+    expect(schema?.questions[0]).toMatchObject({
+      category: 'Text',
+      settings: { answerType: 'short' },
+    });
+  });
+
   it('returns AI spec validation errors instead of compiling invalid input', () => {
     const { schema, errors } = compileAiFormSpec(
       createSpec({

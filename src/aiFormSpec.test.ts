@@ -66,6 +66,21 @@ describe('aiFormSpec', () => {
     expect(validateAiFormSpec(createSpec())).toEqual([]);
   });
 
+  it('accepts short text steps', () => {
+    const spec = createSpec({
+      steps: [
+        {
+          stepRef: 'q1',
+          title: 'What is your name?',
+          kind: 'short',
+          weight: 1,
+        },
+      ],
+    });
+
+    expect(validateAiFormSpec(spec)).toEqual([]);
+  });
+
   it('rejects duplicate step refs', () => {
     const spec = createSpec({
       steps: [
@@ -165,6 +180,56 @@ describe('aiFormSpec', () => {
 
     expect(validateAiFormSpec(spec)).toContain(
       'Step q1 branch condition 1 uses boolean branching on a non-yes/no step.'
+    );
+  });
+
+  it('rejects non-boolean answers in yes-no branch conditions', () => {
+    const spec = createSpec({
+      steps: [
+        {
+          stepRef: 'q1',
+          title: 'Ready?',
+          kind: 'yesno',
+          weight: 1,
+          branchConditions: [
+            { answer: 'some' as unknown as boolean, goToStepRef: 'end' },
+          ],
+        },
+        {
+          stepRef: 'end',
+          title: 'Done',
+          kind: 'end',
+          weight: 0,
+        },
+      ],
+    });
+
+    expect(validateAiFormSpec(spec)).toContain(
+      'Step q1 branch condition 1 must use a boolean answer.'
+    );
+  });
+
+  it('reports malformed branch conditions without throwing', () => {
+    const spec = createSpec({
+      steps: [
+        {
+          stepRef: 'q1',
+          title: 'Ready?',
+          kind: 'yesno',
+          weight: 1,
+          branchConditions: [{ 'answer:true,': 'end' } as unknown as { answer: boolean; goToStepRef: string }],
+        },
+        {
+          stepRef: 'end',
+          title: 'Done',
+          kind: 'end',
+          weight: 0,
+        },
+      ],
+    });
+
+    expect(validateAiFormSpec(spec)).toContain(
+      'Step q1 branch condition 1 has an invalid goToStepRef.'
     );
   });
 

@@ -3,6 +3,7 @@ import type { FormBranchOperator, FormQuestionSettings, FormTheme } from '../src
 export type AiAnswerType =
   | 'yesno'
   | 'multiple'
+  | 'short'
   | 'long'
   | 'email'
   | 'number'
@@ -67,6 +68,7 @@ export interface AiFormSpec {
 const VALID_STEP_KINDS = new Set<AiAnswerType>([
   'yesno',
   'multiple',
+  'short',
   'long',
   'email',
   'number',
@@ -95,6 +97,8 @@ const isFiniteNumber = (value: unknown): value is number => {
   return typeof value === 'number' && Number.isFinite(value);
 };
 
+const asString = (value: unknown) => (typeof value === 'string' ? value : '');
+
 export const isAiFormSpec = (value: unknown): value is AiFormSpec => {
   if (!isObject(value)) return false;
   return (
@@ -107,35 +111,43 @@ export const isAiFormSpec = (value: unknown): value is AiFormSpec => {
 
 const validateStep = (step: AiFormStep, allStepRefs: Set<string>) => {
   const errors: string[] = [];
+  const stepRef = asString(step.stepRef);
+  const title = asString(step.title);
 
-  if (!step.stepRef.trim()) {
+  if (!stepRef.trim()) {
     errors.push('Each step must define a non-empty stepRef.');
   }
 
-  if (!step.title.trim()) {
-    errors.push(`Step ${step.stepRef || '(missing ref)'} is missing a title.`);
+  if (!title.trim()) {
+    errors.push(`Step ${stepRef || '(missing ref)'} is missing a title.`);
   }
 
   if (!VALID_STEP_KINDS.has(step.kind)) {
-    errors.push(`Step ${step.stepRef || '(missing ref)'} has an invalid kind.`);
+    errors.push(`Step ${stepRef || '(missing ref)'} has an invalid kind.`);
   }
 
   if (step.defaultGoToStepRef !== undefined && !allStepRefs.has(step.defaultGoToStepRef)) {
-    errors.push(`Step ${step.stepRef} has an invalid defaultGoToStepRef.`);
+    errors.push(`Step ${stepRef} has an invalid defaultGoToStepRef.`);
   }
 
   if (step.branchConditions?.length) {
     if (NON_QUESTION_KINDS.has(step.kind)) {
-      errors.push(`Step ${step.stepRef} cannot use branchConditions.`);
+      errors.push(`Step ${stepRef} cannot use branchConditions.`);
     }
     step.branchConditions.forEach((condition, index) => {
-      if (!condition.goToStepRef.trim() || !allStepRefs.has(condition.goToStepRef)) {
-        errors.push(`Step ${step.stepRef} branch condition ${index + 1} has an invalid goToStepRef.`);
+      const goToStepRef = asString(condition.goToStepRef);
+      if (!goToStepRef.trim() || !allStepRefs.has(goToStepRef)) {
+        errors.push(`Step ${stepRef} branch condition ${index + 1} has an invalid goToStepRef.`);
       }
 
       if (condition.answer !== undefined && step.kind !== 'yesno') {
         errors.push(
-          `Step ${step.stepRef} branch condition ${index + 1} uses boolean branching on a non-yes/no step.`
+          `Step ${stepRef} branch condition ${index + 1} uses boolean branching on a non-yes/no step.`
+        );
+      }
+      if (condition.answer !== undefined && typeof condition.answer !== 'boolean') {
+        errors.push(
+          `Step ${stepRef} branch condition ${index + 1} must use a boolean answer.`
         );
       }
 
@@ -145,7 +157,7 @@ const validateStep = (step: AiFormStep, allStepRefs: Set<string>) => {
           !['multiple', 'long', 'email', 'date'].includes(step.kind)
         ) {
           errors.push(
-            `Step ${step.stepRef} branch condition ${index + 1} uses an unsupported contains operator.`
+            `Step ${stepRef} branch condition ${index + 1} uses an unsupported contains operator.`
           );
         }
 
@@ -159,7 +171,7 @@ const validateStep = (step: AiFormStep, allStepRefs: Set<string>) => {
           step.kind !== 'number'
         ) {
           errors.push(
-            `Step ${step.stepRef} branch condition ${index + 1} uses numeric comparison on a non-number step.`
+            `Step ${stepRef} branch condition ${index + 1} uses numeric comparison on a non-number step.`
           );
         }
 
@@ -170,11 +182,11 @@ const validateStep = (step: AiFormStep, allStepRefs: Set<string>) => {
           condition.answer === undefined
         ) {
           errors.push(
-            `Step ${step.stepRef} branch condition ${index + 1} is missing a comparison value.`
+            `Step ${stepRef} branch condition ${index + 1} is missing a comparison value.`
           );
         }
       } else if (condition.answer === undefined) {
-        errors.push(`Step ${step.stepRef} branch condition ${index + 1} is missing a branching rule.`);
+        errors.push(`Step ${stepRef} branch condition ${index + 1} is missing a branching rule.`);
       }
     });
 
@@ -188,61 +200,61 @@ const validateStep = (step: AiFormStep, allStepRefs: Set<string>) => {
       )
     );
     if (uniqueConditions.size !== step.branchConditions.length) {
-      errors.push(`Step ${step.stepRef} has duplicate branch conditions.`);
+      errors.push(`Step ${stepRef} has duplicate branch conditions.`);
     }
   }
 
   if (step.kind === 'multiple') {
     const choices = step.choices ?? [];
     if (choices.length === 0) {
-      errors.push(`Step ${step.stepRef} must define at least one choice.`);
+      errors.push(`Step ${stepRef} must define at least one choice.`);
     }
     if (choices.some((choice) => !choice.trim())) {
-      errors.push(`Step ${step.stepRef} has an empty choice label.`);
+      errors.push(`Step ${stepRef} has an empty choice label.`);
     }
     if (new Set(choices.map((choice) => choice.trim())).size !== choices.length) {
-      errors.push(`Step ${step.stepRef} has duplicate choice labels.`);
+      errors.push(`Step ${stepRef} has duplicate choice labels.`);
     }
   } else if (step.choices?.length) {
-    errors.push(`Step ${step.stepRef} can only define choices for multiple-choice steps.`);
+    errors.push(`Step ${stepRef} can only define choices for multiple-choice steps.`);
   }
 
   if (step.allowMultipleSelection && step.kind !== 'multiple') {
-    errors.push(`Step ${step.stepRef} can only enable multiple selection for multiple-choice steps.`);
+    errors.push(`Step ${stepRef} can only enable multiple selection for multiple-choice steps.`);
   }
 
   if (step.allowOtherOption && step.kind !== 'multiple') {
-    errors.push(`Step ${step.stepRef} can only enable "Other" for multiple-choice steps.`);
+    errors.push(`Step ${stepRef} can only enable "Other" for multiple-choice steps.`);
   }
 
   if (step.numberRange) {
     if (step.kind !== 'number') {
-      errors.push(`Step ${step.stepRef} can only define numberRange for number steps.`);
+      errors.push(`Step ${stepRef} can only define numberRange for number steps.`);
     }
     const { min, max } = step.numberRange;
     if (min !== undefined && !isFiniteNumber(min)) {
-      errors.push(`Step ${step.stepRef} has an invalid minimum number.`);
+      errors.push(`Step ${stepRef} has an invalid minimum number.`);
     }
     if (max !== undefined && !isFiniteNumber(max)) {
-      errors.push(`Step ${step.stepRef} has an invalid maximum number.`);
+      errors.push(`Step ${stepRef} has an invalid maximum number.`);
     }
     if (min !== undefined && max !== undefined && min > max) {
-      errors.push(`Step ${step.stepRef} has min number greater than max number.`);
+      errors.push(`Step ${stepRef} has min number greater than max number.`);
     }
   }
 
   if (step.dateFormat) {
     if (step.kind !== 'date') {
-      errors.push(`Step ${step.stepRef} can only define dateFormat for date steps.`);
+      errors.push(`Step ${stepRef} can only define dateFormat for date steps.`);
     }
   }
 
   if (step.weight !== undefined) {
     if (!isFiniteNumber(step.weight)) {
-      errors.push(`Step ${step.stepRef} has an invalid weight.`);
+      errors.push(`Step ${stepRef} has an invalid weight.`);
     }
     if (NON_QUESTION_KINDS.has(step.kind) && step.weight !== 0) {
-      errors.push(`Step ${step.stepRef} must use weight 0 for non-question steps.`);
+      errors.push(`Step ${stepRef} must use weight 0 for non-question steps.`);
     }
   }
 

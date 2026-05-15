@@ -44,7 +44,7 @@ const AI_FORM_SPEC_JSON_SCHEMA = {
             title: { type: 'string' },
             kind: {
               type: 'string',
-              enum: ['yesno', 'multiple', 'long', 'email', 'number', 'date', 'welcome', 'end', 'group'],
+              enum: ['yesno', 'multiple', 'short', 'long', 'email', 'number', 'date', 'welcome', 'end', 'details', 'group'],
             },
             description: { type: 'string' },
             required: { type: 'boolean' },
@@ -142,6 +142,7 @@ Rules:
 - Prefer one end step only when the brief implies it.
 - Use kind "yesno" for boolean qualification questions.
 - Use kind "multiple" only when explicit choices make sense.
+- Use kind "short" for one-line text answers and "long" for paragraph answers.
 - Use branchConditions only on yes/no steps.
 - Use defaultGoToStepRef for simple sequential flow.
 - Use weight 0 for welcome, end, and group steps.

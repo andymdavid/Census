@@ -29,6 +29,7 @@ const categoryForStepKind = (kind: AiFormStep['kind']) => {
       return 'Number';
     case 'date':
       return 'Date';
+    case 'short':
     case 'long':
       return 'Text';
     case 'yesno':
