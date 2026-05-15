@@ -42,6 +42,8 @@ const deleteLeadsByResponses = db.prepare(
   'DELETE FROM leads WHERE response_id IN (SELECT id FROM responses WHERE form_id = ?)'
 );
 
+const createCopyTitle = (title: string) => `${title} (Copy)`;
+
 export const listForms = (workspaceId: string) => {
   return selectForms.all(workspaceId) as Array<
     Pick<FormRecord, 'id' | 'title' | 'created_at' | 'updated_at' | 'published'> & {
@@ -68,6 +70,23 @@ export const createForm = (input: { title: string; schema: unknown; workspaceId:
   insertForm.run(id, input.title, schemaJson, now, now, 0, input.workspaceId);
 
   return { id, created_at: now, updated_at: now, published: 0 };
+};
+
+export const duplicateForm = (form: FormRecord) => {
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  const title = createCopyTitle(form.title);
+
+  insertForm.run(id, title, form.schema_json, now, now, 0, form.workspace_id);
+
+  return {
+    id,
+    title,
+    created_at: now,
+    updated_at: now,
+    published: 0,
+    responses_count: 0,
+  };
 };
 
 export const updateFormById = (id: string, input: { title: string; schema: unknown }) => {

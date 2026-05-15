@@ -440,6 +440,75 @@ describe('API routes', () => {
     expect(updateResponse.status).toBe(400);
   });
 
+  test('duplicates a form without copying responses', async () => {
+    const owner = createOwnedWorkspaceContext();
+    const form = createForm({
+      title: 'Original Form',
+      workspaceId: owner.workspaceId,
+      schema: createValidSchema(),
+    });
+    createResponse({
+      formId: form.id,
+      score: 1,
+      answers: [{ questionId: '1', answer: 'true' }],
+      completed: true,
+    });
+
+    const response = await handleFormsRoutes(
+      createAuthedRequest({
+        url: `http://localhost/api/forms/${form.id}/duplicate`,
+        method: 'POST',
+        sessionId: owner.sessionId,
+      })
+    );
+
+    expect(response.status).toBe(201);
+    const data = (await response.json()) as {
+      form: {
+        id: string;
+        title: string;
+        published: number;
+        responses_count: number;
+      };
+    };
+    expect(data.form.id).not.toBe(form.id);
+    expect(data.form.title).toBe('Original Form (Copy)');
+    expect(data.form.published).toBe(0);
+    expect(data.form.responses_count).toBe(0);
+
+    const listResponse = await handleFormsRoutes(
+      createAuthedRequest({
+        url: `http://localhost/api/forms?workspaceId=${owner.workspaceId}`,
+        sessionId: owner.sessionId,
+      })
+    );
+    const listData = (await listResponse.json()) as {
+      forms: Array<{ id: string; responses_count: number }>;
+    };
+    const copied = listData.forms.find((entry) => entry.id === data.form.id);
+    expect(copied?.responses_count).toBe(0);
+  });
+
+  test('does not duplicate forms for non-workspace members', async () => {
+    const owner = createOwnedWorkspaceContext();
+    const form = createForm({
+      title: 'Private Form',
+      workspaceId: owner.workspaceId,
+      schema: createValidSchema(),
+    });
+    const outsiderSession = createSession(createPubkey());
+
+    const response = await handleFormsRoutes(
+      createAuthedRequest({
+        url: `http://localhost/api/forms/${form.id}/duplicate`,
+        method: 'POST',
+        sessionId: outsiderSession.id,
+      })
+    );
+
+    expect(response.status).toBe(404);
+  });
+
   test('rejects invalid response submissions against the saved form schema', async () => {
     const owner = createOwnedWorkspaceContext();
     const form = createForm({

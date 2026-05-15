@@ -1,5 +1,6 @@
 import {
   createForm,
+  duplicateForm,
   getFormById,
   listForms,
   deleteFormById,
@@ -94,6 +95,21 @@ export const handleFormsRoutes = async (request: Request) => {
       schema,
       published: form.published,
     });
+  }
+
+  const duplicateMatch = path.match(/^\/api\/forms\/([^/]+)\/duplicate$/);
+  if (duplicateMatch && request.method === 'POST') {
+    const formId = duplicateMatch[1];
+    const form = getFormById(formId);
+    if (!form) {
+      return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+    }
+    if (!isWorkspaceMember(form.workspace_id, session?.pubkey ?? '')) {
+      return jsonResponse({ error: 'Form not found.' }, { status: 404 });
+    }
+
+    const duplicate = duplicateForm(form);
+    return jsonResponse({ form: duplicate }, { status: 201 });
   }
 
   const formIdMatch = path.match(/^\/api\/forms\/([^/]+)$/);

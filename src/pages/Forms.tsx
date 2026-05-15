@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Calendar, ChevronDown, LayoutGrid, Plus, Search, UserPlus } from 'lucide-react';
+import { Calendar, ChevronDown, Copy, LayoutGrid, Plus, Search, UserPlus } from 'lucide-react';
 import { nip19, SimplePool } from 'nostr-tools';
 
 interface FormListItem {
@@ -118,6 +118,7 @@ const Forms: React.FC = () => {
   const [adminBrandTextColor, setAdminBrandTextColor] = useState('#1f2937');
   const [openRouterConfigured, setOpenRouterConfigured] = useState(false);
   const [deleteFormTarget, setDeleteFormTarget] = useState<FormListItem | null>(null);
+  const [duplicatingFormId, setDuplicatingFormId] = useState<string | null>(null);
 
   const readApiError = async (response: Response, fallback: string) => {
     try {
@@ -765,6 +766,27 @@ const Forms: React.FC = () => {
     setDeleteFormTarget(null);
   };
 
+  const handleDuplicateForm = async (form: FormListItem) => {
+    setError(null);
+    setDuplicatingFormId(form.id);
+    try {
+      const response = await fetch(`/api/forms/${form.id}/duplicate`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        setError(await readApiError(response, 'Unable to duplicate form.'));
+        return;
+      }
+      const data = (await response.json()) as { form?: FormListItem };
+      if (data.form) {
+        setForms((prev) => [data.form as FormListItem, ...prev]);
+      }
+    } finally {
+      setDuplicatingFormId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <header className="h-14 px-6 flex items-center justify-between">
@@ -1255,6 +1277,17 @@ const Forms: React.FC = () => {
                                       }}
                                     >
                                       Analytics
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item
+                                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer flex items-center gap-2"
+                                      disabled={duplicatingFormId === form.id}
+                                      onSelect={(event) => {
+                                        event.preventDefault();
+                                        void handleDuplicateForm(form);
+                                      }}
+                                    >
+                                      <Copy className="h-3.5 w-3.5" />
+                                      {duplicatingFormId === form.id ? 'Duplicating...' : 'Duplicate'}
                                     </DropdownMenu.Item>
                                     <DropdownMenu.Item
                                       className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
