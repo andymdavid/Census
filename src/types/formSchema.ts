@@ -54,6 +54,8 @@ export interface FormQuestionSettings {
   maxCharactersEnabled?: boolean;
   maxCharacters?: number;
   longTextFormat?: 'paragraph' | 'steps' | 'numbered';
+  stepListCount?: 1 | 2 | 3 | 4 | 5;
+  stepListLabels?: string[];
   dateFormat?: 'MMDDYYYY' | 'DDMMYYYY' | 'YYYYMMDD';
   dateSeparator?: '/' | '-' | '.';
   minNumberEnabled?: boolean;
@@ -86,6 +88,7 @@ export interface FormRepeatLoop {
   endQuestionId: number;
   exitQuestionId?: number;
   titleQuestionId?: number;
+  requiredStepListQuestionId?: number;
   addAnotherLabel?: string;
   continueLabel?: string;
   minRepeats?: number;

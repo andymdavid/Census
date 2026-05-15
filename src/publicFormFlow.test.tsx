@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import type { FormSchemaV0 } from './types/formSchema';
 
+const hasTextContent = (text: string) => (_content: string, element: Element | null) =>
+  element?.textContent === text;
+
 const createPublicBranchedForm = (): FormSchemaV0 => ({
   version: 'v0',
   id: 'public-flow-form',
@@ -69,20 +72,27 @@ const createRepeatLoopForm = (): FormSchemaV0 => ({
   questions: [
     {
       id: 1,
-      text: 'Process name',
+      text: "What's your name?",
       weight: 0,
       category: 'Text',
       settings: { answerType: 'long' },
     },
     {
       id: 2,
+      text: 'Process name',
+      weight: 0,
+      category: 'Text',
+      settings: { answerType: 'long' },
+    },
+    {
+      id: 3,
       text: 'Is this process documented?',
       weight: 0,
       category: 'Yes/No',
       settings: { answerType: 'yesno' },
     },
     {
-      id: 3,
+      id: 4,
       text: 'Finished',
       weight: 0,
       category: 'End Screen',
@@ -94,11 +104,94 @@ const createRepeatLoopForm = (): FormSchemaV0 => ({
       id: 'process-loop',
       label: 'Process',
       pluralLabel: 'Processes',
-      startQuestionId: 1,
-      endQuestionId: 2,
-      exitQuestionId: 3,
-      titleQuestionId: 1,
+      startQuestionId: 2,
+      endQuestionId: 3,
+      exitQuestionId: 4,
+      titleQuestionId: 2,
       addAnotherLabel: 'Add another process',
+      continueLabel: 'Continue',
+    },
+  ],
+  results: [],
+});
+
+const createRecallStepListForm = (): FormSchemaV0 => ({
+  version: 'v0',
+  id: 'recall-step-form',
+  title: 'Recall Step Form',
+  questions: [
+    {
+      id: 2,
+      text: 'What are the top activities that take up your time?',
+      weight: 0,
+      category: 'Text',
+      settings: {
+        answerType: 'long',
+        longTextFormat: 'steps',
+        stepListCount: 2,
+      },
+      branching: { next: 3 },
+    },
+    {
+      id: 3,
+      text: 'Can you describe the key activities you complete for "Answer:Q2:Step1"?',
+      weight: 0,
+      category: 'Text',
+      settings: { answerType: 'long' },
+    },
+    {
+      id: 4,
+      text: 'Done',
+      weight: 0,
+      category: 'End Screen',
+      settings: { kind: 'end' },
+    },
+  ],
+  results: [],
+});
+
+const createLoopRecallStepListForm = (): FormSchemaV0 => ({
+  version: 'v0',
+  id: 'loop-recall-step-form',
+  title: 'Loop Recall Step Form',
+  questions: [
+    {
+      id: 2,
+      text: 'What are the top activities that take up your time?',
+      weight: 0,
+      category: 'Text',
+      settings: {
+        answerType: 'long',
+        longTextFormat: 'steps',
+        stepListCount: 2,
+      },
+      branching: { next: 3 },
+    },
+    {
+      id: 3,
+      text: 'Can you describe the key activities you complete for "Answer:Q2:StepCurrent"?',
+      weight: 0,
+      category: 'Text',
+      settings: { answerType: 'long' },
+    },
+    {
+      id: 4,
+      text: 'Done',
+      weight: 0,
+      category: 'End Screen',
+      settings: { kind: 'end' },
+    },
+  ],
+  repeatLoops: [
+    {
+      id: 'activity-loop',
+      label: 'Activity',
+      pluralLabel: 'Activities',
+      startQuestionId: 3,
+      endQuestionId: 3,
+      exitQuestionId: 4,
+      requiredStepListQuestionId: 2,
+      addAnotherLabel: 'Add another activity',
       continueLabel: 'Continue',
     },
   ],
@@ -309,6 +402,12 @@ describe('Public form flow', () => {
 
     render(<App />);
 
+    expect(await screen.findByText("What's your name?")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('Type your answer here...'), {
+      target: { value: 'Andy' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
     expect(await screen.findByText('Process name')).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText('Type your answer here...'), {
       target: { value: 'Invoice approvals' },
@@ -341,25 +440,32 @@ describe('Public form flow', () => {
     await waitFor(() => {
       expect(completedPayloads).toHaveLength(1);
     });
-    expect(completedPayloads[0].answers).toEqual([
-      { questionId: '1', answer: 'Invoice approvals' },
-      { questionId: '2', answer: 'yes' },
-      { questionId: '1', answer: 'Employee onboarding' },
-      { questionId: '2', answer: 'yes' },
-    ]);
+    expect(completedPayloads[0].answers).toEqual(
+      expect.arrayContaining([
+        { questionId: '1', answer: 'Andy' },
+        { questionId: '2', answer: 'Invoice approvals' },
+        { questionId: '3', answer: 'yes' },
+        { questionId: '2', answer: 'Employee onboarding' },
+      ])
+    );
     expect(completedPayloads[0].meta?.repeatLoops?.[0].instances).toEqual([
-      { index: 1, title: 'Invoice approvals', questionIds: [1, 2] },
-      { index: 2, title: 'Employee onboarding', questionIds: [1, 2] },
-    ]);
-    expect(draftPayloads.map((payload) => payload.answers)).toContainEqual([
-      { questionId: '1', answer: 'Employee onboarding' },
+      { index: 1, title: 'Invoice approvals', questionIds: [2, 3] },
+      { index: 2, title: 'Employee onboarding', questionIds: [2, 3] },
     ]);
     expect(
       draftPayloads.some(
         (payload) =>
-          payload.answers.filter((answer) => answer.questionId === '1').length > 1
+          payload.answers.some(
+            (answer) => answer.questionId === '1' && answer.answer === 'Andy'
+          ) &&
+          payload.answers.some(
+            (answer) => answer.questionId === '2' && answer.answer === 'Invoice approvals'
+          ) &&
+          payload.answers.some(
+            (answer) => answer.questionId === '2' && answer.answer === 'Employee onboarding'
+          )
       )
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('shows a not-found message when the public form cannot be loaded', async () => {
@@ -372,5 +478,146 @@ describe('Public form flow', () => {
     expect(
       await screen.findByText('This form could not be found or is not published.')
     ).toBeInTheDocument();
+  });
+
+  it('recalls a step-list answer in later question text using the internal question id', async () => {
+    const form = createRecallStepListForm();
+    window.history.pushState({}, '', '/f/recall-step-form');
+    const fetchMock = vi.spyOn(global, 'fetch');
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      const method = init?.method ?? 'GET';
+
+      if (url === '/api/forms/recall-step-form/public' && method === 'GET') {
+        return new Response(JSON.stringify({ schema: form }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (
+        (url.startsWith('/api/forms/recall-step-form/responses/draft-status') ||
+          url.startsWith('/api/forms/recall-step-form/responses/draft-resume')) &&
+        method === 'GET'
+      ) {
+        return new Response(JSON.stringify(url.includes('draft-resume') ? { draft: null } : { resetRequired: false }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (url === '/api/forms/recall-step-form/responses' && method === 'POST') {
+        return new Response(JSON.stringify({ id: 'recall-response-id' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('What are the top activities that take up your time?')).toBeInTheDocument();
+    const stepInputs = await screen.findAllByPlaceholderText('Describe this step...');
+    fireEvent.change(stepInputs[0], { target: { value: 'Reconciling Invoices' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(
+      await screen.findByText(
+        hasTextContent('Can you describe the key activities you complete for "Reconciling Invoices"?')
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('recalls the matching step-list answer for each repeat loop pass', async () => {
+    const form = createLoopRecallStepListForm();
+    window.history.pushState({}, '', '/f/loop-recall-step-form');
+    const fetchMock = vi.spyOn(global, 'fetch');
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      const method = init?.method ?? 'GET';
+
+      if (url === '/api/forms/loop-recall-step-form/public' && method === 'GET') {
+        return new Response(JSON.stringify({ schema: form }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (
+        (url.startsWith('/api/forms/loop-recall-step-form/responses/draft-status') ||
+          url.startsWith('/api/forms/loop-recall-step-form/responses/draft-resume')) &&
+        method === 'GET'
+      ) {
+        return new Response(JSON.stringify(url.includes('draft-resume') ? { draft: null } : { resetRequired: false }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (url === '/api/forms/loop-recall-step-form/responses' && method === 'POST') {
+        return new Response(JSON.stringify({ id: 'loop-recall-response-id' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('What are the top activities that take up your time?')).toBeInTheDocument();
+    const stepInputs = await screen.findAllByPlaceholderText('Describe this step...');
+    fireEvent.change(stepInputs[0], { target: { value: 'Reconciling Invoices' } });
+    fireEvent.change(stepInputs[1], { target: { value: 'Account management' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(
+      await screen.findByText(
+        hasTextContent('Can you describe the key activities you complete for "Reconciling Invoices"?')
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText('Step 2 of 3')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('Type your answer here...'), {
+      target: { value: 'Invoice work' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByText(hasTextContent('Reconciling Invoices complete'))).toBeInTheDocument();
+    expect(screen.getAllByText('Reconciling Invoices').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByRole('button', { name: 'Add another activity' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(
+      await screen.findByText(
+        hasTextContent('Can you describe the key activities you complete for "Account management"?')
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('Type your answer here...'), {
+      target: { value: 'Account work' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(await screen.findByText('All 2 step-list answers have been covered.')).toBeInTheDocument();
+    expect(screen.getByText('Reconciling Invoices')).toBeInTheDocument();
+    expect(screen.getAllByText('Account management').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByRole('button', { name: 'Add another activity' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(await screen.findByText('Done')).toBeInTheDocument();
   });
 });

@@ -63,15 +63,20 @@ body {
 }
 
 .typeform-card {
-  @apply bg-white rounded-xl shadow-md max-w-full sm:max-w-md md:max-w-lg w-full p-6 md:p-8;
+  @apply rounded-xl shadow-md max-w-full sm:max-w-md md:max-w-lg w-full p-6 md:p-8;
+  background-color: var(--color-card);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
 }
 
 .typeform-heading {
-  @apply text-2xl md:text-3xl font-bold text-center mb-6 text-gray-800;
+  @apply text-2xl md:text-3xl font-bold text-center mb-6;
+  color: var(--color-text);
 }
 
 .typeform-text {
-  @apply text-gray-600 text-center mb-8;
+  @apply text-center mb-8;
+  color: var(--color-text-light);
 }
 
 .typeform-button-primary {
@@ -101,7 +106,8 @@ body {
 }
 
 .typeform-progress-text {
-  @apply flex justify-between text-sm text-gray-500 mb-2;
+  @apply flex justify-between text-sm mb-2;
+  color: var(--color-text-light);
 }
 
 /* New Typeform-style classes */
@@ -122,7 +128,8 @@ body {
 }
 
 .typeform-thin-progress {
-  @apply w-full h-1 bg-gray-100;
+  @apply w-full h-1;
+  background-color: var(--color-card-muted);
 }
 
 .typeform-thin-progress-fill {
@@ -131,11 +138,13 @@ body {
 }
 
 .typeform-category {
-  @apply text-sm font-medium text-gray-500 mb-3 tracking-wide uppercase;
+  @apply text-sm font-medium mb-3 tracking-wide uppercase;
+  color: var(--color-text-light);
 }
 
 .typeform-question {
-  @apply text-3xl md:text-4xl font-bold text-center mb-12 max-w-2xl mx-auto text-gray-800 leading-tight;
+  @apply text-3xl md:text-4xl font-bold text-center mb-12 max-w-2xl mx-auto leading-tight;
+  color: var(--color-text);
 }
 
 .typeform-content {
@@ -223,13 +232,27 @@ body {
 }
 
 .typeform-option-yes {
-  @apply border text-white hover:shadow-sm;
+  @apply border hover:shadow-sm;
   border-color: var(--color-primary);
   background-color: var(--color-primary);
+  color: var(--color-primary-contrast);
 }
 
 .typeform-option-no {
-  @apply border border-gray-300 text-gray-700 hover:border-rose-500 hover:text-rose-600 hover:bg-rose-50 hover:shadow-sm active:bg-rose-100;
+  @apply border hover:shadow-sm;
+  border-color: var(--color-border);
+  color: var(--color-text);
+  background-color: var(--color-card);
+}
+
+.typeform-option-no:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+}
+
+.typeform-option-no:active {
+  background-color: var(--color-primary-soft);
 }
 
 /* Main button style */
@@ -237,6 +260,36 @@ body {
   @apply px-6 py-3 rounded-lg text-base font-medium border transition-all duration-300 hover:shadow-sm;
   border-color: var(--color-primary);
   color: var(--color-primary);
+  background-color: var(--color-card);
+}
+
+.typeform-muted-copy {
+  color: var(--color-text-light);
+}
+
+.typeform-subtle-copy {
+  color: var(--color-text-lighter);
+}
+
+.typeform-surface {
+  background-color: var(--color-card);
+  border-color: var(--color-border);
+}
+
+.typeform-field-surface {
+  background-color: var(--color-card);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.typeform-field-underline {
+  background-color: transparent;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-primary);
+}
+
+.typeform-field-underline::placeholder {
+  color: var(--color-text-lighter);
 }
 
 .of-panel {

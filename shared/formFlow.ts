@@ -208,6 +208,13 @@ export const parseStoredAnswerForQuestion = (
     return normalizeChoiceForBranching(normalized);
   }
 
+  if (
+    answerType === 'long' &&
+    (question.settings?.longTextFormat === 'steps' || question.settings?.longTextFormat === 'numbered')
+  ) {
+    return parseMultipleAnswer(normalized);
+  }
+
   return normalized;
 };
 

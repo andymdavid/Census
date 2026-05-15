@@ -40,14 +40,12 @@ import {
   isFlowQuestion,
   isScoringEnabled,
 } from '../../shared/formFlow';
-
-const defaultTheme = {
-  primaryColor: '#4f46e5',
-  backgroundColor: '#f5f6fa',
-  textColor: '#1f2937',
-  fontFamily: 'Inter, sans-serif',
-  logoUrl: '',
-};
+import { buildFormThemeStyles, defaultFormTheme, normalizeHexColor } from '../utils/formTheme';
+const defaultTheme = defaultFormTheme;
+const STEP_LIST_COUNTS = [1, 2, 3, 4, 5] as const;
+const getStepListCount = (settings: FormQuestionSettings) => settings.stepListCount ?? 3;
+const getStepListLabel = (settings: FormQuestionSettings, index: number) =>
+  settings.stepListLabels?.[index]?.trim() || `Step ${index + 1}`;
 
 const emptySchema: FormSchemaV0 = {
   version: 'v0',
@@ -72,6 +70,81 @@ const baseResults = [
     minScore: 50,
   },
 ];
+
+const themeSwatches = {
+  primary: ['#2ea782', '#4f46e5', '#0f766e', '#2563eb', '#d97706', '#be123c', '#111827', '#7c3aed'],
+  background: ['#ffffff', '#f5f6fa', '#f8fafc', '#eef6ff', '#f7fbf5', '#262623', '#111827', '#1f2937'],
+  text: ['#111827', '#1f2937', '#334155', '#475569', '#ffffff', '#f8fafc', '#dbeafe', '#fde68a'],
+};
+
+type ThemeColorFieldProps = {
+  label: string;
+  value: string;
+  swatches: string[];
+  onChange: (value: string) => void;
+};
+
+const ThemeColorField: React.FC<ThemeColorFieldProps> = ({ label, value, swatches, onChange }) => {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  const commitDraft = () => {
+    const normalized = normalizeHexColor(draft);
+    if (!normalized) {
+      setDraft(value);
+      return;
+    }
+    setDraft(normalized);
+    if (normalized !== value) {
+      onChange(normalized);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="of-label">{label}</label>
+      <div className="flex flex-wrap gap-2">
+        {swatches.map((swatch) => (
+          <button
+            key={`${label}-${swatch}`}
+            type="button"
+            aria-label={`${label} ${swatch}`}
+            className={`h-9 w-9 rounded-full border-2 transition ${
+              swatch.toLowerCase() === value.toLowerCase()
+                ? 'scale-105 border-gray-900 shadow-sm'
+                : 'border-white/0 hover:scale-105 hover:border-gray-300'
+            }`}
+            style={{ backgroundColor: swatch }}
+            onClick={() => onChange(swatch)}
+          />
+        ))}
+      </div>
+      <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
+        <div
+          className="h-8 w-8 rounded-lg border border-gray-200"
+          style={{ backgroundColor: value }}
+        />
+        <input
+          type="text"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commitDraft}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commitDraft();
+            }
+          }}
+          className="of-input border-0 p-0 focus:ring-0"
+          placeholder="#000000"
+        />
+      </div>
+    </div>
+  );
+};
 
 const createSchema = (overrides: Partial<FormSchemaV0> = {}): FormSchemaV0 => {
   return {
@@ -545,6 +618,12 @@ const Builder: React.FC = () => {
   const [aiSubmitting, setAiSubmitting] = useState(false);
   const [aiPreview, setAiPreview] = useState<AiPreviewData | null>(null);
   const [aiFileName, setAiFileName] = useState<string | null>(null);
+  const [recallPicker, setRecallPicker] = useState<{
+    open: boolean;
+    sourceQuestionId: number | null;
+    replaceStart: number;
+    replaceEnd: number;
+  }>({ open: false, sourceQuestionId: null, replaceStart: 0, replaceEnd: 0 });
 
   const readApiError = async (response: Response, fallback: string) => {
     try {
@@ -600,6 +679,17 @@ const Builder: React.FC = () => {
     id: question.id,
     label: getQuestionDisplayLabel(question, index),
   }));
+  const stepListQuestionOptions = schema.questions
+    .map((question, index) => ({ question, index }))
+    .filter(
+      ({ question }) =>
+        inferQuestionAnswerType(question) === 'long' && question.settings?.longTextFormat === 'steps'
+    )
+    .map(({ question, index }) => ({
+      id: question.id,
+      label: getQuestionDisplayLabel(question, index),
+      text: question.text,
+    }));
   const resultOptions = schema.results;
   const isSelectedWelcome = selectedQuestion?.category === 'Welcome Screen';
   const isSelectedEnd = selectedQuestion?.category === 'End Screen';
@@ -637,7 +727,10 @@ const Builder: React.FC = () => {
           .filter(isAnswerableQuestion).length;
   const selectedGroupTitle =
     isSelectedGroup && selectedQuestion
-      ? selectedQuestion.text.replace(/^section\s+\d+\s*:\s*/i, '').trim() || selectedQuestion.text
+      ? (() => {
+          const titleWithoutPrefix = selectedQuestion.text.replace(/^section\s+\d+\s*:\s*/i, '');
+          return titleWithoutPrefix.trim().length > 0 ? titleWithoutPrefix : selectedQuestion.text;
+        })()
       : selectedQuestion?.text ?? '';
   const selectedGroupDescription = selectedSettings.description?.trim() ?? '';
   const selectedGroupDescriptionMatchesTitle =
@@ -1154,6 +1247,82 @@ const Builder: React.FC = () => {
     }));
   };
 
+  const getStepListRecallSources = () => {
+    if (!selectedQuestion) return [];
+    const selectedIndex = schema.questions.findIndex((question) => question.id === selectedQuestion.id);
+    return schema.questions.filter((question, index) => {
+      if (index >= selectedIndex) return false;
+      return inferQuestionAnswerType(question) === 'long' && question.settings?.longTextFormat === 'steps';
+    });
+  };
+
+  const getSelectedRepeatLoop = () => {
+    if (!selectedQuestion) return null;
+    return (
+      schema.repeatLoops?.find((loop) => {
+        const startIndex = schema.questions.findIndex((question) => question.id === loop.startQuestionId);
+        const endIndex = schema.questions.findIndex((question) => question.id === loop.endQuestionId);
+        const selectedIndex = schema.questions.findIndex((question) => question.id === selectedQuestion.id);
+        return startIndex >= 0 && endIndex >= 0 && selectedIndex >= startIndex && selectedIndex <= endIndex;
+      }) ?? null
+    );
+  };
+
+  const handleQuestionTitleChange = (value: string, cursorPosition: number | null) => {
+    if (!selectedQuestion) return;
+    updateQuestion(selectedQuestion.id, (question) => ({
+      ...question,
+      text: value,
+    }));
+    if (questionTitleRef.current) {
+      questionTitleRef.current.style.height = 'auto';
+      questionTitleRef.current.style.height = `${questionTitleRef.current.scrollHeight}px`;
+    }
+    const cursor = cursorPosition ?? value.length;
+    const replaceStart = value.lastIndexOf('<', cursor - 1);
+    const activeFragment =
+      replaceStart >= 0 &&
+      !value.slice(replaceStart + 1, cursor).includes('>') &&
+      value.slice(replaceStart + 1, cursor).trim().length === 0;
+    if (activeFragment) {
+      setRecallPicker({ open: true, sourceQuestionId: null, replaceStart, replaceEnd: cursor });
+    } else {
+      setRecallPicker((current) => (current.open ? { ...current, open: false } : current));
+    }
+  };
+
+  const insertRecallToken = (sourceQuestionId: number, stepIndex: number | 'current') => {
+    if (!selectedQuestion) return;
+    const token =
+      stepIndex === 'current'
+        ? `Answer:Q${sourceQuestionId}:StepCurrent`
+        : `Answer:Q${sourceQuestionId}:Step${stepIndex + 1}`;
+    const before = selectedQuestion.text.slice(0, recallPicker.replaceStart);
+    const after = selectedQuestion.text.slice(recallPicker.replaceEnd);
+    const nextText = `${before}${token}${after}`;
+    updateQuestion(selectedQuestion.id, (question) => ({ ...question, text: nextText }));
+    setRecallPicker({ open: false, sourceQuestionId: null, replaceStart: 0, replaceEnd: 0 });
+    window.setTimeout(() => {
+      const cursor = before.length + token.length;
+      questionTitleRef.current?.focus();
+      questionTitleRef.current?.setSelectionRange(cursor, cursor);
+    }, 0);
+  };
+
+  const updateSelectedStepListLabel = (index: number, value: string) => {
+    updateSelectedQuestionSettings((settings) => {
+      const count = getStepListCount(settings);
+      const labels = Array.from({ length: count }, (_, itemIndex) =>
+        settings.stepListLabels?.[itemIndex] ?? `Step ${itemIndex + 1}`
+      );
+      labels[index] = value;
+      return {
+        ...settings,
+        stepListLabels: labels,
+      };
+    });
+  };
+
   const handleMediaUpload = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -1338,14 +1507,7 @@ const Builder: React.FC = () => {
     }
   };
 
-  const themeStyles = schema.theme
-    ? ({
-        '--color-primary': schema.theme.primaryColor,
-        '--color-background': schema.theme.backgroundColor,
-        '--color-text': schema.theme.textColor,
-        fontFamily: schema.theme.fontFamily,
-      } as React.CSSProperties)
-    : undefined;
+  const themeStyles = buildFormThemeStyles(schema.theme);
 
   return (
     <Tabs.Root
@@ -1723,7 +1885,10 @@ Build a qualification form for inbound B2B leads.
       </div>
 
       <div className="flex-1 px-6 pb-6 flex min-h-0" style={{ paddingTop: '0px' }}>
-        <div className="rounded-2xl overflow-hidden flex-1 flex" style={{ backgroundColor: '#f7f7f8' }}>
+        <div
+          className="rounded-2xl overflow-hidden flex-1 flex"
+          style={{ backgroundColor: '#f7f7f8' }}
+        >
           <div className="flex flex-1 min-h-0 overflow-hidden">
             <aside className="w-72 p-4 border-r-2 border-white overflow-y-auto">
               <button
@@ -2156,9 +2321,12 @@ Build a qualification form for inbound B2B leads.
                     />
                     <input
                       type="text"
-                      value={schema.description ?? ''}
+                      value={selectedSettings.description ?? ''}
                       onChange={(event) =>
-                        setSchema((prev) => ({ ...prev, description: event.target.value }))
+                        updateSelectedQuestionSettings((settings) => ({
+                          ...settings,
+                          description: event.target.value,
+                        }))
                       }
                       className="w-full max-w-xl text-lg text-gray-400 text-center bg-transparent focus:outline-none mt-6"
                       placeholder="Description (optional)"
@@ -2276,7 +2444,10 @@ Build a qualification form for inbound B2B leads.
                         }`}
                       >
                         {!isSelectedGroup && (
-                          <div className="text-sm text-blue-600 font-medium leading-snug flex items-center gap-2 self-start mt-[6px]">
+                          <div
+                            className="text-sm font-medium leading-snug flex items-center gap-2 self-start mt-[6px]"
+                            style={{ color: 'var(--color-primary)' }}
+                          >
                             <span className="whitespace-nowrap">{selectedQuestionPosition}</span>
                             <span className="whitespace-nowrap">→</span>
                           </div>
@@ -2286,29 +2457,34 @@ Build a qualification form for inbound B2B leads.
                           <>
                             <div
                               ref={questionTitleContainerRef}
-                              className="text-sm text-blue-600 font-medium mb-2 flex items-start gap-2 w-full relative"
+                              className="text-sm font-medium mb-2 flex items-start gap-2 w-full relative"
+                              style={{ color: 'var(--color-primary)' }}
                             >
                               <textarea
                                 ref={questionTitleRef}
                                 rows={1}
                                 value={selectedQuestion.text}
                                 onChange={(event) => {
-                                  updateQuestion(selectedQuestion.id, (question) => ({
-                                    ...question,
-                                    text: event.target.value,
-                                  }));
-                                  if (questionTitleRef.current) {
-                                    questionTitleRef.current.style.height = 'auto';
-                                    questionTitleRef.current.style.height = `${questionTitleRef.current.scrollHeight}px`;
-                                  }
+                                  handleQuestionTitleChange(event.target.value, event.target.selectionStart);
                                 }}
-                                className="text-gray-800 text-[20px] font-semibold bg-transparent focus:outline-none w-full min-w-0 resize-none leading-snug"
-                                placeholder="Your question here. Recall information with @"
-                                style={questionTitleWidth ? { width: questionTitleWidth } : undefined}
+                                onBlur={() => {
+                                  window.setTimeout(() => {
+                                    if (!document.activeElement?.closest('[data-recall-picker="true"]')) {
+                                      setRecallPicker((current) => ({ ...current, open: false }));
+                                    }
+                                  }, 120);
+                                }}
+                                className="text-[20px] font-semibold bg-transparent focus:outline-none w-full min-w-0 resize-none leading-snug"
+                                placeholder="Your question here. Type < to recall a step answer"
+                                style={{
+                                  color: 'var(--color-text)',
+                                  ...(questionTitleWidth ? { width: questionTitleWidth } : {}),
+                                }}
                               />
                               <span
                                 ref={questionTitleMeasureRef}
-                                className="text-gray-800 text-[20px] font-semibold leading-snug absolute opacity-0 pointer-events-none whitespace-pre -left-[9999px]"
+                                className="text-[20px] font-semibold leading-snug absolute opacity-0 pointer-events-none whitespace-pre -left-[9999px]"
+                                style={{ color: 'var(--color-text)' }}
                                 aria-hidden
                               >
                                 {selectedQuestion.text || 'Your question here. Recall information with @'}
@@ -2317,6 +2493,87 @@ Build a qualification form for inbound B2B leads.
                                 <span className="text-red-500 font-semibold pt-1 flex-shrink-0">*</span>
                               )}
                             </div>
+                            {recallPicker.open && selectedQuestion?.id === selectedQuestionId && (
+                              <div
+                                data-recall-picker="true"
+                                className="mb-3 w-full max-w-xl rounded-xl border border-gray-200 bg-white p-3 text-left shadow-lg"
+                              >
+                                {(() => {
+                                  const sources = getStepListRecallSources();
+                                  if (sources.length === 0) {
+                                    return (
+                                      <div className="px-2 py-1 text-sm text-gray-500">
+                                        No earlier step-list questions available.
+                                      </div>
+                                    );
+                                  }
+                                  if (recallPicker.sourceQuestionId === null) {
+                                    return (
+                                      <div className="space-y-1">
+                                        <div className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+                                          Choose a step-list question
+                                        </div>
+                                        {sources.map((source) => (
+                                          <button
+                                            key={source.id}
+                                            type="button"
+                                            className="block w-full rounded-lg px-2 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                            onMouseDown={(event) => event.preventDefault()}
+                                            onClick={() =>
+                                              setRecallPicker((current) => ({
+                                                ...current,
+                                                sourceQuestionId: source.id,
+                                              }))
+                                            }
+                                          >
+                                            {source.text}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    );
+                                  }
+                                  const source = sources.find((item) => item.id === recallPicker.sourceQuestionId);
+                                  const count = source ? getStepListCount(source.settings ?? {}) : 0;
+                                  const selectedLoop = getSelectedRepeatLoop();
+                                  return (
+                                    <div className="space-y-1">
+                                      <button
+                                        type="button"
+                                        className="mb-1 px-2 text-xs text-gray-500 hover:text-gray-700"
+                                        onMouseDown={(event) => event.preventDefault()}
+                                        onClick={() =>
+                                          setRecallPicker((current) => ({ ...current, sourceQuestionId: null }))
+                                        }
+                                      >
+                                        Back
+                                      </button>
+                                      {source && selectedLoop && (
+                                        <button
+                                          type="button"
+                                          className="block w-full rounded-lg px-2 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                          onMouseDown={(event) => event.preventDefault()}
+                                          onClick={() => insertRecallToken(source.id, 'current')}
+                                        >
+                                          Matching step for this repeat loop
+                                        </button>
+                                      )}
+                                      {source &&
+                                        Array.from({ length: count }).map((_, index) => (
+                                          <button
+                                            key={`recall-step-${source.id}-${index}`}
+                                            type="button"
+                                            className="block w-full rounded-lg px-2 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                            onMouseDown={(event) => event.preventDefault()}
+                                            onClick={() => insertRecallToken(source.id, index)}
+                                          >
+                                            {getStepListLabel(source.settings ?? {}, index)}
+                                          </button>
+                                        ))}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            )}
                             <textarea
                               rows={1}
                               value={selectedSettings.description ?? ''}
@@ -2330,7 +2587,7 @@ Build a qualification form for inbound B2B leads.
                                   event.currentTarget.style.height = `${event.currentTarget.scrollHeight}px`;
                                 }
                               }}
-                              className="text-sm text-gray-400 italic bg-transparent focus:outline-none w-full mb-6 resize-none leading-snug"
+                              className="typeform-muted-copy text-sm italic bg-transparent focus:outline-none w-full mb-6 resize-none leading-snug"
                               placeholder="Description (optional)"
                             />
                           </>
@@ -2354,16 +2611,37 @@ Build a qualification form for inbound B2B leads.
                       )}
 
                       {isSelectedGroup ? (
-                        <div className="mt-2 w-full max-w-4xl rounded-[32px] border border-slate-200/80 bg-white/85 px-6 py-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:px-10 sm:py-10">
+                        <div
+                          className="mt-2 w-full max-w-4xl rounded-[32px] border px-6 py-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:px-10 sm:py-10"
+                          style={{
+                            borderColor: 'var(--color-border)',
+                            backgroundColor: 'color-mix(in srgb, var(--color-card) 88%, transparent)',
+                            color: 'var(--color-text)',
+                          }}
+                        >
                           <div className="flex flex-col gap-6">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <span className="inline-flex w-fit rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold tracking-[0.12em] text-blue-700">
+                              <span
+                                className="inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold tracking-[0.12em]"
+                                style={{
+                                  borderColor: 'var(--color-primary)',
+                                  backgroundColor: 'var(--color-primary-soft)',
+                                  color: 'var(--color-primary)',
+                                }}
+                              >
                                 {groupQuestions.length > 0 && selectedGroupIndex >= 0
                                   ? `Section ${selectedGroupIndex + 1} of ${groupQuestions.length}`
                                   : 'Section'}
                               </span>
                               {selectedGroupQuestionCount > 0 && (
-                                <span className="inline-flex w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold tracking-[0.12em] text-emerald-700 sm:ml-auto">
+                                <span
+                                  className="inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold tracking-[0.12em] sm:ml-auto"
+                                  style={{
+                                    borderColor: 'var(--color-border)',
+                                    backgroundColor: 'var(--color-card-muted)',
+                                    color: 'var(--color-text-light)',
+                                  }}
+                                >
                                   {selectedGroupQuestionCount}{' '}
                                   {selectedGroupQuestionCount === 1 ? 'question ahead' : 'questions ahead'}
                                 </span>
@@ -2379,7 +2657,8 @@ Build a qualification form for inbound B2B leads.
                                     text: event.target.value,
                                   }));
                                 }}
-                                className="w-full bg-transparent text-center text-3xl font-semibold tracking-tight text-slate-900 focus:outline-none sm:text-5xl"
+                                className="w-full bg-transparent text-center text-3xl font-semibold tracking-tight focus:outline-none sm:text-5xl"
+                                style={{ color: 'var(--color-text)' }}
                                 placeholder="Section title"
                               />
                               <textarea
@@ -2391,11 +2670,19 @@ Build a qualification form for inbound B2B leads.
                                     description: event.target.value,
                                   }));
                                 }}
-                                className="mx-auto mt-4 w-full max-w-2xl resize-none bg-transparent text-center text-base leading-7 text-slate-600 focus:outline-none sm:text-lg"
+                                className="mx-auto mt-4 w-full max-w-2xl resize-none bg-transparent text-center text-base leading-7 focus:outline-none sm:text-lg"
+                                style={{ color: 'var(--color-text-light)' }}
                                 placeholder={selectedGroupSummary}
                               />
                             </div>
-                            <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-slate-50/80 px-5 py-4 text-center text-sm leading-6 text-slate-600">
+                            <div
+                              className="mx-auto max-w-3xl rounded-2xl border px-5 py-4 text-center text-sm leading-6"
+                              style={{
+                                borderColor: 'var(--color-border)',
+                                backgroundColor: 'var(--color-card-muted)',
+                                color: 'var(--color-text-light)',
+                              }}
+                            >
                               You’re moving into a new topic area. Continue when you’re ready to start this section.
                             </div>
                             <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center sm:items-center">
@@ -2405,7 +2692,7 @@ Build a qualification form for inbound B2B leads.
                               >
                                 {selectedGroupButtonLabel}
                               </button>
-                              <span className="text-sm text-gray-600">press Enter ↵</span>
+                              <span className="typeform-muted-copy text-sm">press Enter ↵</span>
                             </div>
                           </div>
                         </div>
@@ -2424,7 +2711,10 @@ Build a qualification form for inbound B2B leads.
                                   key={`preview-choice-${idx}`}
                                   className="flex items-center gap-3 w-full"
                                 >
-                                  <div className="h-8 w-8 rounded-md border border-blue-300 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                                  <div
+                                    className="h-8 w-8 rounded-md border flex items-center justify-center text-sm font-semibold"
+                                    style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                                  >
                                     {getChoiceKey(idx, selectedSettings.choiceKeyStyle)}
                                   </div>
                                   <input
@@ -2446,7 +2736,12 @@ Build a qualification form for inbound B2B leads.
                                         );
                                       });
                                     }}
-                                    className="min-w-[260px] rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-gray-700 focus:outline-none"
+                                    className="min-w-[260px] rounded-lg border px-3 py-2 text-sm focus:outline-none"
+                                    style={{
+                                      borderColor: 'var(--color-primary)',
+                                      backgroundColor: 'var(--color-primary-soft)',
+                                      color: 'var(--color-text)',
+                                    }}
                                     disabled={isOtherRow}
                                   />
                                   {!isOtherRow && choices.length > 1 && (
@@ -2470,7 +2765,8 @@ Build a qualification form for inbound B2B leads.
                           <div className="w-full flex justify-start">
                             <button
                               type="button"
-                              className="text-blue-600 text-sm font-medium underline underline-offset-2"
+                              className="text-sm font-medium underline underline-offset-2"
+                              style={{ color: 'var(--color-primary)' }}
                               onClick={() =>
                                 updateSelectedChoices((choices) => [
                                   ...choices,
@@ -2486,10 +2782,20 @@ Build a qualification form for inbound B2B leads.
                         <div className="flex flex-col gap-3 w-full items-start">
                           {['Yes', 'No'].map((choice) => (
                             <div key={choice} className="flex items-center gap-3 w-full">
-                              <div className="h-8 w-8 rounded-md border border-blue-300 text-blue-600 flex items-center justify-center text-sm font-semibold">
+                              <div
+                                className="h-8 w-8 rounded-md border flex items-center justify-center text-sm font-semibold"
+                                style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                              >
                                 {choice === 'Yes' ? 'Y' : 'N'}
                               </div>
-                              <div className="min-w-[260px] rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-gray-700">
+                              <div
+                                className="min-w-[260px] rounded-lg border px-3 py-2 text-sm"
+                                style={{
+                                  borderColor: 'var(--color-primary)',
+                                  backgroundColor: 'var(--color-primary-soft)',
+                                  color: 'var(--color-text)',
+                                }}
+                              >
                                 {choice}
                               </div>
                             </div>
@@ -2500,19 +2806,49 @@ Build a qualification form for inbound B2B leads.
                           {selectedSettings.longTextFormat === 'steps' ||
                           selectedSettings.longTextFormat === 'numbered' ? (
                             <div className="space-y-3">
-                              {[1, 2, 3].map((item) => (
-                                <div key={`preview-list-item-${item}`} className="flex items-center gap-3">
-                                  <div className="w-16 text-sm font-medium text-blue-700">
-                                    {selectedSettings.longTextFormat === 'steps' ? `Step ${item}` : `${item}.`}
-                                  </div>
-                                  <div className="min-w-0 flex-1 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm text-gray-400">
+                              {Array.from({
+                                length:
+                                  selectedSettings.longTextFormat === 'steps'
+                                    ? getStepListCount(selectedSettings)
+                                    : 3,
+                              }).map((_, index) => (
+                                <div key={`preview-list-item-${index}`} className="flex items-center gap-3">
+                                  {selectedSettings.longTextFormat === 'steps' ? (
+                                    <input
+                                      type="text"
+                                      value={getStepListLabel(selectedSettings, index)}
+                                      onChange={(event) => updateSelectedStepListLabel(index, event.target.value)}
+                                      className="w-28 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium focus:border-gray-300 focus:bg-white focus:outline-none"
+                                      style={{ color: 'var(--color-primary)' }}
+                                      aria-label={`Step ${index + 1} label`}
+                                    />
+                                  ) : (
+                                    <div className="w-16 text-sm font-medium" style={{ color: 'var(--color-primary)' }}>
+                                      {`${index + 1}.`}
+                                    </div>
+                                  )}
+                                  <div
+                                    className="min-w-0 flex-1 rounded-xl border px-4 py-3 text-sm"
+                                    style={{
+                                      borderColor: 'var(--color-border)',
+                                      backgroundColor: 'var(--color-card)',
+                                      color: 'var(--color-text-light)',
+                                    }}
+                                  >
                                     {selectedSettings.longTextFormat === 'steps'
                                       ? 'Describe this step...'
                                       : 'Type an item...'}
                                   </div>
                                 </div>
                               ))}
-                              <div className="inline-flex rounded-xl border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700">
+                              <div
+                                className="inline-flex rounded-xl border px-4 py-2 text-sm font-medium"
+                                style={{
+                                  borderColor: 'var(--color-primary)',
+                                  backgroundColor: 'var(--color-primary-soft)',
+                                  color: 'var(--color-primary)',
+                                }}
+                              >
                                 {selectedSettings.longTextFormat === 'steps'
                                   ? 'Add another step'
                                   : 'Add another item'}
@@ -2524,11 +2860,11 @@ Build a qualification form for inbound B2B leads.
                                 rows={1}
                                 value=""
                                 readOnly
-                                className="w-full bg-transparent text-blue-700 placeholder:text-blue-300 border-b border-blue-400 focus:outline-none resize-none pointer-events-none p-0 leading-[1.1] h-[44px]"
+                                className="typeform-field-underline w-full focus:outline-none resize-none pointer-events-none p-0 leading-[1.1] h-[44px]"
                                 style={{ fontSize: '28px' }}
                                 placeholder="Type your answer here..."
                               />
-                              <div className="text-sm text-blue-700" style={{ marginTop: '2px' }}>
+                              <div className="text-sm" style={{ marginTop: '2px', color: 'var(--color-primary)' }}>
                                 <span className="font-medium">Shift</span> + Enter ↵ to make a line break
                               </div>
                             </>
@@ -2542,15 +2878,15 @@ Build a qualification form for inbound B2B leads.
                             const parts = format === 'DDMMYYYY' ? ['DD', 'MM', 'YYYY'] : format === 'YYYYMMDD' ? ['YYYY', 'MM', 'DD'] : ['MM', 'DD', 'YYYY'];
                             const labels: Record<string, string> = { MM: 'Month', DD: 'Day', YYYY: 'Year' };
                             return (
-                              <div className="flex items-end gap-6 text-blue-700 text-sm">
+                              <div className="flex items-end gap-6 text-sm" style={{ color: 'var(--color-primary)' }}>
                                 {parts.map((part, index) => (
                                   <React.Fragment key={part}>
                                     <div className="flex flex-col gap-2">
                                       <span>{labels[part]}</span>
-                                      <div className="text-[36px] text-blue-700 border-b border-blue-400 pb-2">{part}</div>
+                                      <div className="text-[36px] border-b pb-2" style={{ borderColor: 'var(--color-primary)' }}>{part}</div>
                                     </div>
                                     {index < parts.length - 1 && (
-                                      <div className="text-[36px] text-blue-700 pb-2">{separator}</div>
+                                      <div className="text-[36px] pb-2">{separator}</div>
                                     )}
                                   </React.Fragment>
                                 ))}
@@ -2564,7 +2900,7 @@ Build a qualification form for inbound B2B leads.
                             type="text"
                             value=""
                             readOnly
-                            className="w-full bg-transparent text-blue-700 placeholder:text-blue-300 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
+                            className="typeform-field-underline w-full focus:outline-none p-0 text-[28px] leading-[1.2]"
                             placeholder="name@example.com"
                           />
                         </div>
@@ -2584,15 +2920,20 @@ Build a qualification form for inbound B2B leads.
                                 return (
                                 <div
                                   key={`preview-number-${option}`}
-                                  className={`flex min-h-12 items-center rounded-xl border border-blue-300 bg-white px-4 py-3 text-blue-700 shadow-sm ${
+                                  className={`flex min-h-12 items-center rounded-xl border px-4 py-3 shadow-sm ${
                                     hasLabel ? 'w-full gap-3 text-left' : 'min-w-12 justify-center text-lg font-semibold'
                                   }`}
+                                  style={{
+                                    borderColor: 'var(--color-border)',
+                                    backgroundColor: 'var(--color-card)',
+                                    color: 'var(--color-primary)',
+                                  }}
                                 >
                                   <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-current text-sm font-semibold">
                                     {option}
                                   </span>
                                   {hasLabel && (
-                                    <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-gray-700">
+                                    <span className="min-w-0 flex-1 text-sm font-medium leading-snug" style={{ color: 'var(--color-text)' }}>
                                       {optionLabel}
                                     </span>
                                   )}
@@ -2606,7 +2947,7 @@ Build a qualification form for inbound B2B leads.
                                 type="text"
                                 value=""
                                 readOnly
-                                className="block w-full bg-transparent text-blue-700 placeholder:text-blue-300 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
+                                className="typeform-field-underline block w-full focus:outline-none p-0 text-[28px] leading-[1.2]"
                                 placeholder="Type your answer here..."
                               />
                               {getNumberUnitChoices(selectedSettings).length > 0 && (
@@ -2614,9 +2955,14 @@ Build a qualification form for inbound B2B leads.
                                   {getNumberUnitChoices(selectedSettings).map((unit) => (
                                     <div
                                       key={`preview-number-unit-${unit}`}
-                                      className="w-full rounded-xl border border-blue-300 bg-white px-4 py-3 text-blue-700 shadow-sm"
+                                      className="w-full rounded-xl border px-4 py-3 shadow-sm"
+                                      style={{
+                                        borderColor: 'var(--color-border)',
+                                        backgroundColor: 'var(--color-card)',
+                                        color: 'var(--color-primary)',
+                                      }}
                                     >
-                                      <span className="text-sm font-medium leading-snug text-gray-700">
+                                      <span className="text-sm font-medium leading-snug" style={{ color: 'var(--color-text)' }}>
                                         {unit}
                                       </span>
                                     </div>
@@ -3099,6 +3445,40 @@ Build a qualification form for inbound B2B leads.
                                 Step list is for ordered process steps. Numbered list is for collecting multiple separate responses.
                               </div>
                             </div>
+
+                            {selectedSettings.longTextFormat === 'steps' && (
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="of-label">Steps shown</label>
+                                  <select
+                                    value={getStepListCount(selectedSettings)}
+                                    onChange={(event) =>
+                                      updateSelectedQuestionSettings((settings) => {
+                                        const count = Number(event.target.value) as FormQuestionSettings['stepListCount'];
+                                        const labels = Array.from({ length: count ?? 3 }, (_, index) =>
+                                          settings.stepListLabels?.[index] ?? `Step ${index + 1}`
+                                        );
+                                        return {
+                                          ...settings,
+                                          stepListCount: count,
+                                          stepListLabels: labels,
+                                        };
+                                      })
+                                    }
+                                    className="of-input"
+                                  >
+                                    {STEP_LIST_COUNTS.map((count) => (
+                                      <option key={count} value={count}>
+                                        {count}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="text-xs leading-5 text-gray-500">
+                                  The Add another step button stays available on the live form.
+                                </div>
+                              </div>
+                            )}
 
                             <div className="flex items-center justify-between">
                               <div className="text-sm text-gray-600">Max characters</div>
@@ -3938,6 +4318,71 @@ Build a qualification form for inbound B2B leads.
                             />
                           </div>
                         </div>
+
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-left">
+                          <div className="space-y-3">
+                            <div className="max-w-full">
+                              <div className="text-sm font-medium text-gray-700">Match a step list</div>
+                              <div className="mt-1 text-xs leading-5 text-gray-500">
+                                Require one completed loop for each answer entered in a previous step-list question.
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-xs font-medium text-gray-600">Require matched repeats</span>
+                              <Switch.Root
+                                className="of-switch shrink-0"
+                                checked={loop.requiredStepListQuestionId !== undefined}
+                                disabled={stepListQuestionOptions.length === 0}
+                                onCheckedChange={(checked) =>
+                                  setSchema((prev) => ({
+                                    ...prev,
+                                    repeatLoops: (prev.repeatLoops ?? []).map((item) =>
+                                      item.id === loop.id
+                                        ? {
+                                            ...item,
+                                            requiredStepListQuestionId: checked
+                                              ? item.requiredStepListQuestionId ?? stepListQuestionOptions[0]?.id
+                                              : undefined,
+                                          }
+                                        : item
+                                    ),
+                                  }))
+                                }
+                              >
+                                <Switch.Thumb className="of-switch-thumb" />
+                              </Switch.Root>
+                            </div>
+                          </div>
+                          {stepListQuestionOptions.length === 0 ? (
+                            <div className="mt-3 text-xs text-gray-500">
+                              Add a Step list text question before using this option.
+                            </div>
+                          ) : loop.requiredStepListQuestionId !== undefined ? (
+                            <div className="mt-3">
+                              <label className="of-label">Step list question</label>
+                              <select
+                                value={loop.requiredStepListQuestionId}
+                                onChange={(event) =>
+                                  setSchema((prev) => ({
+                                    ...prev,
+                                    repeatLoops: (prev.repeatLoops ?? []).map((item) =>
+                                      item.id === loop.id
+                                        ? { ...item, requiredStepListQuestionId: Number(event.target.value) }
+                                        : item
+                                    ),
+                                  }))
+                                }
+                                className="of-input"
+                              >
+                                {stepListQuestionOptions.map((option) => (
+                                  <option key={`loop-step-list-${loop.id}-${option.id}`} value={option.id}>
+                                    {option.label} - {option.text}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -4006,57 +4451,54 @@ Build a qualification form for inbound B2B leads.
                   </div>
                 </div>
                 <div>
-                  <label className="of-label">Primary color</label>
-                  <input
-                    type="color"
+                  <ThemeColorField
+                    label="Primary color"
                     value={schema.theme?.primaryColor ?? defaultTheme.primaryColor}
-                    onChange={(event) =>
+                    swatches={themeSwatches.primary}
+                    onChange={(value) =>
                       setSchema((prev) => ({
                         ...prev,
                         theme: {
                           ...defaultTheme,
                           ...(prev.theme ?? {}),
-                          primaryColor: event.target.value,
+                          primaryColor: value,
                         },
                       }))
                     }
-                    className="h-10 w-full border border-gray-200 rounded-md"
                   />
                 </div>
                 <div>
-                  <label className="of-label">Background color</label>
-                  <input
-                    type="color"
+                  <ThemeColorField
+                    label="Background color"
                     value={schema.theme?.backgroundColor ?? defaultTheme.backgroundColor}
-                    onChange={(event) =>
+                    swatches={themeSwatches.background}
+                    onChange={(value) =>
                       setSchema((prev) => ({
                         ...prev,
                         theme: {
                           ...defaultTheme,
                           ...(prev.theme ?? {}),
-                          backgroundColor: event.target.value,
+                          backgroundColor: value,
                         },
                       }))
                     }
-                    className="h-10 w-full border border-gray-200 rounded-md"
                   />
                 </div>
                 <div>
-                  <label className="of-label">Text color</label>
-                  <input
-                    type="color"
+                  <ThemeColorField
+                    label="Text color"
                     value={schema.theme?.textColor ?? defaultTheme.textColor}
-                    onChange={(event) =>
+                    swatches={themeSwatches.text}
+                    onChange={(value) =>
                       setSchema((prev) => ({
                         ...prev,
                         theme: {
                           ...defaultTheme,
                           ...(prev.theme ?? {}),
-                          textColor: event.target.value,
+                          textColor: value,
                         },
                       }))
                     }
-                    className="h-10 w-full border border-gray-200 rounded-md"
                   />
                 </div>
                 <div>

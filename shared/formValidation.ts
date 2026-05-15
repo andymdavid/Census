@@ -189,6 +189,18 @@ export const validateFormSchema = (schema: FormSchemaV0) => {
     if (loop.titleQuestionId !== undefined && !uniqueIds.has(loop.titleQuestionId)) {
       errors.push(`${label} has an invalid title question.`);
     }
+    if (loop.requiredStepListQuestionId !== undefined) {
+      const stepListQuestion = schema.questions.find(
+        (question) => question.id === loop.requiredStepListQuestionId
+      );
+      if (
+        !stepListQuestion ||
+        inferQuestionAnswerType(stepListQuestion) !== 'long' ||
+        stepListQuestion.settings?.longTextFormat !== 'steps'
+      ) {
+        errors.push(`${label} has an invalid step list requirement question.`);
+      }
+    }
 
     const startIndex = schema.questions.findIndex((question) => question.id === loop.startQuestionId);
     const endIndex = schema.questions.findIndex((question) => question.id === loop.endQuestionId);
@@ -245,6 +257,21 @@ export const validateFormSchema = (schema: FormSchemaV0) => {
       !VALID_LONG_TEXT_FORMATS.has(question.settings.longTextFormat)
     ) {
       errors.push(`Question ${question.id} has an invalid text format.`);
+    }
+    if (
+      question.settings?.stepListCount !== undefined &&
+      (!Number.isInteger(question.settings.stepListCount) ||
+        question.settings.stepListCount < 1 ||
+        question.settings.stepListCount > 5)
+    ) {
+      errors.push(`Question ${question.id} has an invalid step list count.`);
+    }
+    if (
+      question.settings?.stepListLabels !== undefined &&
+      (!Array.isArray(question.settings.stepListLabels) ||
+        question.settings.stepListLabels.some((label) => typeof label !== 'string'))
+    ) {
+      errors.push(`Question ${question.id} has invalid step list labels.`);
     }
 
     if (
@@ -446,9 +473,14 @@ const parseResponseMeta = (value: unknown): ParsedResponseMeta | null => {
   };
 };
 
-const isValidAnswerForQuestion = (question: FormQuestion, answer: string) => {
+const isValidAnswerForQuestion = (
+  question: FormQuestion,
+  answer: string,
+  options?: { allowIncompleteOther?: boolean }
+) => {
   const answerType = inferQuestionAnswerType(question);
   const normalized = answer.trim();
+  const allowIncompleteOther = Boolean(options?.allowIncompleteOther);
 
   if (answerType === 'yesno') {
     return normalized === 'yes' || normalized === 'no';
@@ -506,7 +538,11 @@ const isValidAnswerForQuestion = (question: FormQuestion, answer: string) => {
 
     if (!question.settings?.multipleSelection) {
       if (isOtherAnswer(normalized) && question.settings?.otherOption) {
-        return normalized === 'Other' || normalized.slice('Other:'.length).trim().length > 0;
+        return (
+          normalized === 'Other' ||
+          normalized.slice('Other:'.length).trim().length > 0 ||
+          allowIncompleteOther
+        );
       }
       return allowedChoices.has(normalized);
     }
@@ -517,7 +553,11 @@ const isValidAnswerForQuestion = (question: FormQuestion, answer: string) => {
     }
     return selections.every((selection) => {
       if (isOtherAnswer(selection) && question.settings?.otherOption) {
-        return selection === 'Other' || selection.slice('Other:'.length).trim().length > 0;
+        return (
+          selection === 'Other' ||
+          selection.slice('Other:'.length).trim().length > 0 ||
+          allowIncompleteOther
+        );
       }
       return allowedChoices.has(selection);
     });
@@ -607,7 +647,7 @@ export const validateResponseSubmission = (
     answerIds.add(numericQuestionId);
 
     const question = questionById.get(numericQuestionId);
-    if (!question || !isValidAnswerForQuestion(question, item.answer)) {
+    if (!question || !isValidAnswerForQuestion(question, item.answer, { allowIncompleteOther: !completed })) {
       errors.push(`Question ${numericQuestionId} has an invalid answer value.`);
       return;
     }

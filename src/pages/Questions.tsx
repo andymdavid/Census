@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { loadForm } from '../data/loadForm';
 import type { LoadedFormSchema } from '../types/formSchema';
+import { buildFormThemeStyles } from '../utils/formTheme';
 import {
   getFirstFlowQuestionId,
   getQuestionRangeIds,
   getRepeatLoopAfterQuestion,
   getRepeatLoopExitQuestionId,
+  getTerminalQuestionIds,
   getRepeatLoopForQuestion,
   inferQuestionAnswerType,
   getNextQuestionId as getFormNextQuestionId,
@@ -49,10 +51,21 @@ const getChoiceKey = (index: number, style: 'letters' | 'numbers' = 'letters') =
 };
 
 const isOtherAnswer = (value: string) => value.trim() === 'Other' || value.trim().startsWith('Other:');
+const getStepListCount = (settings?: LoadedFormSchema['questions'][number]['settings']) =>
+  settings?.stepListCount ?? 3;
+const getStepListLabel = (
+  settings: LoadedFormSchema['questions'][number]['settings'] | undefined,
+  index: number
+) => settings?.stepListLabels?.[index]?.trim() || `Step ${index + 1}`;
+const RECALL_TOKEN_PATTERN = /Answer:Q(\d+)(?::Step(\d+|Current))?/gi;
+
+type ResolvedTextPart = { text: string; recalled: boolean };
 
 const getOtherAnswerText = (value: string) => {
-  const trimmed = value.trim();
-  return trimmed.startsWith('Other:') ? trimmed.slice('Other:'.length).trimStart() : '';
+  const leadingTrimmed = value.trimStart();
+  return leadingTrimmed.startsWith('Other:')
+    ? leadingTrimmed.slice('Other:'.length).trimStart()
+    : '';
 };
 
 const normalizeChoiceForBranching = (value: string) => (isOtherAnswer(value) ? 'Other' : value);
@@ -157,14 +170,7 @@ const Questions: React.FC<QuestionsProps> = ({
   const scoringEnabled = isScoringEnabled(form);
   const totalScore = scoringEnabled ? form.totalScore : 0;
   const logoUrl = form.theme?.logoUrl;
-  const themeStyles = form.theme
-    ? ({
-        '--color-primary': form.theme.primaryColor,
-        '--color-background': form.theme.backgroundColor,
-        '--color-text': form.theme.textColor,
-        fontFamily: form.theme.fontFamily,
-      } as React.CSSProperties)
-    : undefined;
+  const themeStyles = buildFormThemeStyles(form.theme);
   const questionMap = useMemo(
     () => new Map(allQuestions.map((question) => [question.id, question])),
     [allQuestions]
@@ -192,6 +198,8 @@ const Questions: React.FC<QuestionsProps> = ({
   const [loopSummaryId, setLoopSummaryId] = useState<string | null>(null);
   const draftStorageKey = formId ? `census.form-draft.${formId}` : null;
   const lastAutosaveSignatureRef = useRef<string | null>(null);
+  const questionContentRef = useRef<HTMLDivElement | null>(null);
+  const longAnswerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const getLoopInstanceAnswers = (loopId: string, answersSnapshot: AnswerMap) => {
     const loop = form.repeatLoops?.find((item) => item.id === loopId);
@@ -213,6 +221,10 @@ const Questions: React.FC<QuestionsProps> = ({
     fallbackIndex: number
   ) => {
     const loop = form.repeatLoops?.find((item) => item.id === loopId);
+    if (loop?.requiredStepListQuestionId !== undefined) {
+      const stepListTitle = getStepListAnswers(loop.requiredStepListQuestionId)[fallbackIndex - 1];
+      if (stepListTitle) return stepListTitle;
+    }
     const titleAnswer = loop?.titleQuestionId ? instanceAnswers[loop.titleQuestionId] : undefined;
     if (typeof titleAnswer === 'string' && titleAnswer.trim()) return titleAnswer.trim();
     if (Array.isArray(titleAnswer)) {
@@ -228,6 +240,29 @@ const Questions: React.FC<QuestionsProps> = ({
     return Object.keys(current).length > 0 ? [...archived, current] : archived;
   };
 
+  const getStepListAnswers = (questionId: number | undefined, answersSnapshot = answers) => {
+    if (questionId === undefined) return [];
+    const answer = answersSnapshot[questionId];
+    if (Array.isArray(answer)) {
+      return answer.map((item) => item.trim()).filter(Boolean);
+    }
+    if (typeof answer === 'string') {
+      return answer
+        .split(/\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  const getStepListAnswerCount = (questionId: number | undefined, answersSnapshot = answers) =>
+    getStepListAnswers(questionId, answersSnapshot).length;
+
+  const getRequiredLoopInstanceCount = (
+    loop: NonNullable<LoadedFormSchema['repeatLoops']>[number],
+    answersSnapshot = answers
+  ) => getStepListAnswerCount(loop.requiredStepListQuestionId, answersSnapshot);
+
   const clearLoopAnswers = (loopId: string, answersSnapshot: AnswerMap) => {
     const loop = form.repeatLoops?.find((item) => item.id === loopId);
     if (!loop) return answersSnapshot;
@@ -241,6 +276,25 @@ const Questions: React.FC<QuestionsProps> = ({
     return nextAnswers;
   };
 
+  const getRetainedAnswers = (
+    answersSnapshot: AnswerMap,
+    retainedQuestionIds: Set<number>
+  ): AnswerMap => {
+    const repeatedQuestionIds = new Set(
+      (form.repeatLoops ?? []).flatMap((loop) =>
+        getQuestionRangeIds(form, loop.startQuestionId, loop.endQuestionId)
+      )
+    );
+    const nextAnswers: AnswerMap = {};
+    for (const [key, value] of Object.entries(answersSnapshot)) {
+      const numericKey = Number(key);
+      if (retainedQuestionIds.has(numericKey) || !repeatedQuestionIds.has(numericKey)) {
+        nextAnswers[numericKey] = value as boolean | string | string[];
+      }
+    }
+    return nextAnswers;
+  };
+
   const archiveLoopInstance = (loopId: string, answersSnapshot: AnswerMap) => {
     const instanceAnswers = getLoopInstanceAnswers(loopId, answersSnapshot);
     if (Object.keys(instanceAnswers).length === 0) {
@@ -249,6 +303,19 @@ const Questions: React.FC<QuestionsProps> = ({
     const nextInstances = [...(repeatInstances[loopId] ?? []), instanceAnswers];
     setRepeatInstances((prev) => ({ ...prev, [loopId]: nextInstances }));
     return nextInstances;
+  };
+
+  const getPersistedLoopInstances = (
+    loopId: string,
+    answersSnapshot: AnswerMap,
+    includeCurrentInstance: boolean
+  ) => {
+    const archived = repeatInstances[loopId] ?? [];
+    if (!includeCurrentInstance) {
+      return archived;
+    }
+    const currentInstance = getLoopInstanceAnswers(loopId, answersSnapshot);
+    return Object.keys(currentInstance).length > 0 ? [...archived, currentInstance] : archived;
   };
 
   // Handle answer selection
@@ -370,12 +437,11 @@ const Questions: React.FC<QuestionsProps> = ({
         ? form.repeatLoops?.find((loop) => loop.id === loopSummaryId)
         : getRepeatLoopForQuestion(form, currentQuestionId);
     const repeatAnswerItems = (form.repeatLoops ?? []).flatMap((loop) => {
-      const currentInstance = getLoopInstanceAnswers(loop.id, answersSnapshot);
-      const instances = completed
-        ? getLoopSummaryInstances(loop.id, answersSnapshot)
-        : currentRepeatLoop?.id === loop.id && Object.keys(currentInstance).length > 0
-          ? [currentInstance]
-          : [];
+      const instances = getPersistedLoopInstances(
+        loop.id,
+        answersSnapshot,
+        completed || currentRepeatLoop?.id === loop.id
+      );
       return instances.flatMap((instanceAnswers) =>
         getQuestionRangeIds(form, loop.startQuestionId, loop.endQuestionId).flatMap((questionId) => {
           const answer = instanceAnswers[questionId];
@@ -397,15 +463,27 @@ const Questions: React.FC<QuestionsProps> = ({
         getQuestionRangeIds(form, loop.startQuestionId, loop.endQuestionId)
       )
     );
+    const answeredNonRepeatedQuestionIds = Object.entries(answersSnapshot)
+      .map(([questionId, answer]) => ({
+        questionId: Number(questionId),
+        answer,
+      }))
+      .filter(
+        ({ questionId, answer }) =>
+          !repeatedQuestionIds.has(questionId) && hasRecordedResponse(answer as boolean | string | string[])
+      )
+      .map(({ questionId }) => questionId);
+    const persistedVisitedIds = Array.from(
+      new Set([...visitedIds, ...answeredNonRepeatedQuestionIds])
+    );
     const repeatMeta =
       (form.repeatLoops ?? [])
         .map((loop) => {
-          const currentInstance = getLoopInstanceAnswers(loop.id, answersSnapshot);
-          const instances = completed
-            ? getLoopSummaryInstances(loop.id, answersSnapshot)
-            : currentRepeatLoop?.id === loop.id && Object.keys(currentInstance).length > 0
-              ? [currentInstance]
-              : [];
+          const instances = getPersistedLoopInstances(
+            loop.id,
+            answersSnapshot,
+            completed || currentRepeatLoop?.id === loop.id
+          );
           return {
             loopId: loop.id,
             label: loop.label,
@@ -421,7 +499,7 @@ const Questions: React.FC<QuestionsProps> = ({
       responseId: responseId ?? undefined,
       answers: [
         ...repeatAnswerItems,
-        ...visitedIds.flatMap((questionId) => {
+        ...persistedVisitedIds.flatMap((questionId) => {
         if (repeatedQuestionIds.has(questionId)) {
           return [];
         }
@@ -439,10 +517,12 @@ const Questions: React.FC<QuestionsProps> = ({
         }),
       ],
       score: finalScore,
-      meta:
-        repeatMeta.length > 0
-          ? { ...meta, draftToken: nextDraftToken, repeatLoops: repeatMeta }
-          : { ...meta, draftToken: nextDraftToken },
+      meta: {
+        ...meta,
+        visitedQuestionIds: persistedVisitedIds,
+        ...(repeatMeta.length > 0 ? { repeatLoops: repeatMeta } : {}),
+        ...(nextDraftToken ? { draftToken: nextDraftToken } : {}),
+      },
       completed,
     };
 
@@ -562,13 +642,7 @@ const Questions: React.FC<QuestionsProps> = ({
 
       const nextHistory = pathQuestionIds;
       const retainedQuestionIds = new Set([...nextHistory, nextId]);
-      const trimmedAnswers: Record<number, boolean | string | string[]> = {};
-      for (const [key, value] of Object.entries(answersSnapshot)) {
-        const numericKey = Number(key);
-        if (retainedQuestionIds.has(numericKey)) {
-          trimmedAnswers[numericKey] = value as boolean | string | string[];
-        }
-      }
+      const trimmedAnswers = getRetainedAnswers(answersSnapshot, retainedQuestionIds);
 
       setHistory(nextHistory);
       setAnswers(trimmedAnswers);
@@ -610,6 +684,9 @@ const Questions: React.FC<QuestionsProps> = ({
     if (!loopSummaryId) return;
     const loop = form.repeatLoops?.find((item) => item.id === loopSummaryId);
     if (!loop) return;
+    const requiredCount = getRequiredLoopInstanceCount(loop);
+    const instances = getLoopSummaryInstances(loop.id);
+    if (requiredCount > 0 && instances.length >= requiredCount) return;
     archiveLoopInstance(loop.id, answers);
     setAnswers(clearLoopAnswers(loop.id, answers));
     setHistory([]);
@@ -622,6 +699,17 @@ const Questions: React.FC<QuestionsProps> = ({
     if (!loopSummaryId || submitting) return;
     const loop = form.repeatLoops?.find((item) => item.id === loopSummaryId);
     if (!loop) return;
+    const requiredCount = getRequiredLoopInstanceCount(loop);
+    const instances = getLoopSummaryInstances(loop.id);
+    if (requiredCount > 0 && instances.length < requiredCount) {
+      archiveLoopInstance(loop.id, answers);
+      setAnswers(clearLoopAnswers(loop.id, answers));
+      setHistory([]);
+      setCurrentQuestionId(loop.startQuestionId);
+      setLoopSummaryId(null);
+      setDirection(1);
+      return;
+    }
     const exitQuestionId = getRepeatLoopExitQuestionId(form, loop);
     const updatedScore = computeScore(answers);
     const pathQuestionIds = [...history, currentQuestionId];
@@ -673,7 +761,8 @@ const Questions: React.FC<QuestionsProps> = ({
     if (!activeLoop || submitting) return;
     const nextAnswers = clearLoopAnswers(activeLoop.id, answers);
     const updatedScore = computeScore(nextAnswers);
-    const pathQuestionIds = [...history, currentQuestionId];
+    const terminalQuestionId = getTerminalQuestionIds(form).at(-1) ?? currentQuestionId;
+    const pathQuestionIds = Array.from(new Set([...history, currentQuestionId, terminalQuestionId]));
 
     setSubmitting(true);
     const finalResult = await submitResponse(
@@ -681,7 +770,7 @@ const Questions: React.FC<QuestionsProps> = ({
       updatedScore,
       {
         visitedQuestionIds: pathQuestionIds,
-        lastQuestionId: currentQuestionId,
+        lastQuestionId: terminalQuestionId,
         completed: true,
       },
       true
@@ -776,9 +865,6 @@ const Questions: React.FC<QuestionsProps> = ({
   };
 
   const question = questionMap.get(currentQuestionId) ?? questions[0];
-  const currentIndexRaw = flowQuestions.findIndex((item) => item.id === question?.id);
-  const currentIndex = currentIndexRaw === -1 ? 0 : currentIndexRaw;
-  const currentStep = history.length + 1;
   const score = computeScore(answers);
   const answerType = question ? inferQuestionAnswerType(question) : 'yesno';
   const isGroup = question?.category === 'Question Group';
@@ -788,11 +874,125 @@ const Questions: React.FC<QuestionsProps> = ({
   const currentAnswer = answers[currentQuestionId];
   const numberUnitChoices = getNumberUnitChoices(question);
   const currentNumberAnswer = splitNumberAnswer(question, currentAnswer);
-  const currentStepAnswers = Array.isArray(currentAnswer)
-    ? currentAnswer
-    : typeof currentAnswer === 'string' && currentAnswer.trim().length > 0
-      ? [currentAnswer]
-      : [''];
+  const currentStepAnswers = (() => {
+    const baseAnswers = Array.isArray(currentAnswer)
+      ? currentAnswer
+      : typeof currentAnswer === 'string' && currentAnswer.trim().length > 0
+        ? [currentAnswer]
+        : [];
+    const minimumCount =
+      question?.settings?.longTextFormat === 'steps' ? getStepListCount(question.settings) : 1;
+    return [
+      ...baseAnswers,
+      ...Array.from({ length: Math.max(minimumCount - baseAnswers.length, 0) }, () => ''),
+    ];
+  })();
+  const displayedFlowProgress = (() => {
+    const currentFlowIndex = Math.max(
+      flowQuestions.findIndex((item) => item.id === currentQuestionId),
+      0
+    );
+    const flowQuestionIds = new Set(flowQuestions.map((item) => item.id));
+    const getLoopFlowQuestionCount = (loop: NonNullable<LoadedFormSchema['repeatLoops']>[number]) =>
+      getQuestionRangeIds(form, loop.startQuestionId, loop.endQuestionId).filter((id) =>
+        flowQuestionIds.has(id)
+      ).length;
+
+    const expandedTotal = (form.repeatLoops ?? []).reduce((total, loop) => {
+      const requiredCount = getRequiredLoopInstanceCount(loop);
+      if (requiredCount <= 1) return total;
+      return total + (requiredCount - 1) * getLoopFlowQuestionCount(loop);
+    }, flowQuestions.length);
+
+    const activeLoop = getRepeatLoopForQuestion(form, currentQuestionId);
+    const expandedOffset = (form.repeatLoops ?? []).reduce((offset, loop) => {
+      const requiredCount = getRequiredLoopInstanceCount(loop);
+      if (requiredCount <= 1) return offset;
+      const loopFlowQuestionCount = getLoopFlowQuestionCount(loop);
+      const loopEndIndex = flowQuestions.findIndex((item) => item.id === loop.endQuestionId);
+      if (loopEndIndex !== -1 && loopEndIndex < currentFlowIndex) {
+        return offset + (requiredCount - 1) * loopFlowQuestionCount;
+      }
+      if (activeLoop?.id === loop.id) {
+        const completedInstances = Math.min(repeatInstances[loop.id]?.length ?? 0, requiredCount - 1);
+        return offset + completedInstances * loopFlowQuestionCount;
+      }
+      return offset;
+    }, 0);
+
+    return {
+      current: currentFlowIndex + 1 + expandedOffset,
+      total: Math.max(expandedTotal, 1),
+    };
+  })();
+  const preferredStepFocusIndex = (() => {
+    const firstEmptyIndex = currentStepAnswers.findIndex(
+      (value) => typeof value === 'string' && value.trim().length === 0
+    );
+    return firstEmptyIndex >= 0 ? firstEmptyIndex : Math.max(currentStepAnswers.length - 1, 0);
+  })();
+  const getRecallValue = (token: string, rawQuestionId: string, rawStepNumber?: string) => {
+      const sourceQuestionId = Number(rawQuestionId);
+      const sourceAnswer = answers[sourceQuestionId];
+      if (rawStepNumber !== undefined) {
+        const activeLoop = getRepeatLoopForQuestion(form, currentQuestionId);
+        const stepIndex =
+          rawStepNumber.toLowerCase() === 'current'
+            ? (() => {
+                return activeLoop ? repeatInstances[activeLoop.id]?.length ?? 0 : 0;
+              })()
+            : Number(rawStepNumber) - 1;
+        const stepAnswers =
+          rawStepNumber.toLowerCase() === 'current' &&
+          activeLoop?.requiredStepListQuestionId === sourceQuestionId
+            ? getStepListAnswers(sourceQuestionId)
+            : Array.isArray(sourceAnswer)
+              ? sourceAnswer
+              : typeof sourceAnswer === 'string' && sourceAnswer.trim().length > 0
+                ? sourceAnswer.split('\n')
+                : [];
+        const stepAnswer = stepAnswers[stepIndex]?.trim();
+        return stepAnswer || token;
+      }
+      if (Array.isArray(sourceAnswer)) {
+        return sourceAnswer.map((item) => item.trim()).filter(Boolean).join(', ') || token;
+      }
+      if (typeof sourceAnswer === 'boolean') return sourceAnswer ? 'Yes' : 'No';
+      if (typeof sourceAnswer === 'string') return sourceAnswer.trim() || token;
+      return token;
+  };
+  const resolveRecallParts = (value: string): ResolvedTextPart[] => {
+    const parts: ResolvedTextPart[] = [];
+    let lastIndex = 0;
+    RECALL_TOKEN_PATTERN.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = RECALL_TOKEN_PATTERN.exec(value)) !== null) {
+      const index = match.index;
+      if (index > lastIndex) {
+        parts.push({ text: value.slice(lastIndex, index), recalled: false });
+      }
+      parts.push({ text: getRecallValue(match[0], match[1], match[2]), recalled: true });
+      lastIndex = index + match[0].length;
+    }
+    if (lastIndex < value.length) {
+      parts.push({ text: value.slice(lastIndex), recalled: false });
+    }
+    return parts.length > 0 ? parts : [{ text: value, recalled: false }];
+  };
+  const renderResolvedText = (parts: ResolvedTextPart[]) =>
+    parts.map((part, index) =>
+      part.recalled ? (
+        <span key={`resolved-${index}`} style={{ color: 'var(--color-primary)' }}>
+          {part.text}
+        </span>
+      ) : (
+        <React.Fragment key={`resolved-${index}`}>{part.text}</React.Fragment>
+      )
+    );
+  const displayedQuestionTextParts = question ? resolveRecallParts(question.text) : [];
+  const displayedQuestionDescriptionParts = question?.settings?.description
+    ? resolveRecallParts(question.settings.description)
+    : [];
   const canContinue = (() => {
     if (!isRequired) {
       if (answerType === 'number' && numberUnitChoices.length > 0 && currentNumberAnswer.value) {
@@ -875,13 +1075,21 @@ const Questions: React.FC<QuestionsProps> = ({
     endScreen?.settings && Object.prototype.hasOwnProperty.call(endScreen.settings, 'footerText')
       ? endScreen.settings.footerText?.trim() ?? ''
       : 'Thank you for your submissions. You may now close this page.';
+  const welcomeDescription = welcomeScreen?.settings?.description?.trim() ?? '';
+  const endDescription = endScreen?.settings?.description?.trim() ?? '';
   const pageStyles =
     isGroup
       ? ({
           ...themeStyles,
+          backgroundColor: 'var(--color-background)',
+          color: 'var(--color-text)',
           background: 'linear-gradient(135deg, #eef6ff 0%, #f7fbf5 55%, #fff9ef 100%)',
         } as React.CSSProperties)
-      : themeStyles;
+      : ({
+          ...themeStyles,
+          backgroundColor: 'var(--color-background)',
+          color: 'var(--color-text)',
+        } as React.CSSProperties);
 
   const continueCurrentStep = () => {
     if (showWelcome && welcomeScreen) {
@@ -1058,6 +1266,13 @@ const Questions: React.FC<QuestionsProps> = ({
 
   useEffect(() => {
     if (previewMode || !draftStorageKey) return;
+    if (showEnd) {
+      window.localStorage.removeItem(draftStorageKey);
+      if (formId) {
+        writeDraftCookie(formId, null);
+      }
+      return;
+    }
     const hasDraftState =
       responseId !== null ||
       draftToken !== null ||
@@ -1099,11 +1314,12 @@ const Questions: React.FC<QuestionsProps> = ({
     previewMode,
     repeatInstances,
     responseId,
+    showEnd,
     showWelcome,
   ]);
 
   useEffect(() => {
-    if (previewMode || !formId || showWelcome || showEnd) {
+    if (previewMode || !formId || showWelcome || showEnd || submitting) {
       return;
     }
 
@@ -1158,6 +1374,7 @@ const Questions: React.FC<QuestionsProps> = ({
     previewMode,
     repeatInstances,
     responseId,
+    submitting,
     showEnd,
     showWelcome,
   ]);
@@ -1186,6 +1403,67 @@ const Questions: React.FC<QuestionsProps> = ({
   }, [
     continueCurrentStep,
   ]);
+
+  useEffect(() => {
+    if (previewMode || restoringDraft || showWelcome || showEnd || loopSummaryId || isContentStep) {
+      return;
+    }
+
+    const shouldAutofocus =
+      answerType === 'long' ||
+      answerType === 'email' ||
+      answerType === 'date' ||
+      (answerType === 'number' && getNumberScaleOptions(question).length === 0);
+
+    if (!shouldAutofocus) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLElement &&
+        questionContentRef.current?.contains(activeElement) &&
+        (activeElement instanceof HTMLInputElement ||
+          activeElement instanceof HTMLTextAreaElement ||
+          activeElement instanceof HTMLSelectElement ||
+          activeElement.isContentEditable)
+      ) {
+        return;
+      }
+      const target = questionContentRef.current?.querySelector<HTMLElement>(
+        '[data-autofocus-target="true"]'
+      );
+      if (!target || target === activeElement) {
+        return;
+      }
+      target.focus();
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+        const valueLength = target.value.length;
+        target.setSelectionRange?.(valueLength, valueLength);
+      }
+    }, 180);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    answerType,
+    currentQuestionId,
+    isContentStep,
+    loopSummaryId,
+    preferredStepFocusIndex,
+    previewMode,
+    question,
+    restoringDraft,
+    showEnd,
+    showWelcome,
+  ]);
+
+  useEffect(() => {
+    const textarea = longAnswerRef.current;
+    if (!textarea || answerType !== 'long' || question?.settings?.longTextFormat) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.max(textarea.scrollHeight, 44)}px`;
+  }, [answerType, currentAnswer, currentQuestionId, question]);
 
   // Animation variants for Framer Motion
   const pageVariants = {
@@ -1252,7 +1530,11 @@ const Questions: React.FC<QuestionsProps> = ({
     return (
       <div
         className={`typeform-fullscreen${previewMode ? ' typeform-preview' : ''}`}
-        style={themeStyles}
+        style={{
+          ...themeStyles,
+          backgroundColor: 'var(--color-background)',
+          color: 'var(--color-text)',
+        }}
       >
         <div className={`typeform-content${previewMode ? ' typeform-content-preview' : ''}`}>
           <div className="typeform-card">
@@ -1267,7 +1549,11 @@ const Questions: React.FC<QuestionsProps> = ({
     return (
       <div
         className={`typeform-fullscreen${previewMode ? ' typeform-preview' : ''}`}
-        style={themeStyles}
+        style={{
+          ...themeStyles,
+          backgroundColor: 'var(--color-background)',
+          color: 'var(--color-text)',
+        }}
       >
         {logoUrl && (
           <div className="absolute top-6 left-1/2 -translate-x-1/2">
@@ -1302,7 +1588,7 @@ const Questions: React.FC<QuestionsProps> = ({
               </div>
             )}
             <h2 className="typeform-heading">{welcomeScreen.text}</h2>
-            {form.description && <p className="typeform-text">{form.description}</p>}
+            {welcomeDescription && <p className="typeform-text">{welcomeDescription}</p>}
             {welcomeScreen.settings?.mediaUrl && welcomeScreen.settings?.mediaPosition !== 'above' && (
               <div className="my-6 flex justify-center">
                 {welcomeScreen.settings.mediaType === 'video' ? (
@@ -1339,7 +1625,7 @@ const Questions: React.FC<QuestionsProps> = ({
             {saveWarning && <p className="mt-4 text-sm text-amber-600">{saveWarning}</p>}
             {(welcomeScreen.settings?.showTimeToComplete ||
               welcomeScreen.settings?.showSubmissionCount) && (
-              <div className="text-gray-400 text-sm mt-4 flex flex-col items-center gap-2">
+              <div className="typeform-subtle-copy mt-4 flex flex-col items-center gap-2 text-sm">
                 {welcomeScreen.settings?.showTimeToComplete && (
                   <span className="inline-block">Takes X minutes</span>
                 )}
@@ -1358,12 +1644,22 @@ const Questions: React.FC<QuestionsProps> = ({
     const loop = form.repeatLoops?.find((item) => item.id === loopSummaryId);
     if (loop) {
       const instances = getLoopSummaryInstances(loop.id);
+      const requiredCount = getRequiredLoopInstanceCount(loop);
       const maxReached =
         loop.maxRepeats !== undefined && instances.length >= loop.maxRepeats;
+      const requiredRemaining = Math.max(requiredCount - instances.length, 0);
+      const stepListLimitReached = requiredCount > 0 && requiredRemaining === 0;
+      const isStepListMatchedLoop = requiredCount > 0;
+      const canAddAnother = !submitting && !maxReached && !stepListLimitReached;
+      const canContinue = !submitting;
       return (
         <div
           className={`typeform-fullscreen${previewMode ? ' typeform-preview' : ''}`}
-          style={themeStyles}
+          style={{
+            ...themeStyles,
+            backgroundColor: 'var(--color-background)',
+            color: 'var(--color-text)',
+          }}
         >
           {logoUrl && (
             <div className="absolute top-6 left-1/2 -translate-x-1/2">
@@ -1377,26 +1673,63 @@ const Questions: React.FC<QuestionsProps> = ({
               initial="hidden"
               animate="visible"
             >
-              <motion.div variants={itemVariants} className="text-sm font-medium text-blue-700">
-                {loop.pluralLabel ?? `${loop.label}s`} added
+              <motion.div variants={itemVariants} className="mb-6 flex justify-start">
+                <span
+                  className="rounded-full border px-3 py-1 text-xs font-semibold"
+                  style={{
+                    borderColor: 'var(--color-border)',
+                    backgroundColor: 'var(--color-card)',
+                    color: 'var(--color-primary)',
+                  }}
+                >
+                  {requiredCount > 0
+                    ? `${instances.length} of ${requiredCount} ${(loop.pluralLabel ?? `${loop.label}s`).toLowerCase()} complete`
+                    : `${instances.length} ${(instances.length === 1 ? loop.label : loop.pluralLabel ?? `${loop.label}s`).toLowerCase()} added`}
+                </span>
               </motion.div>
-              <motion.h2 variants={itemVariants} className="typeform-heading text-left">
-                {`${loop.label} ${instances.length} complete`}
+              <motion.h2 variants={itemVariants} className="typeform-heading text-left" style={{ textAlign: 'left' }}>
+                {loop.requiredStepListQuestionId !== undefined && instances.length > 0 ? (
+                  <>
+                    <span style={{ color: 'var(--color-primary)' }}>
+                      {getLoopInstanceTitle(loop.id, instances[instances.length - 1], instances.length)}
+                    </span>{' '}
+                    complete
+                  </>
+                ) : (
+                  `${loop.label} ${instances.length} complete`
+                )}
               </motion.h2>
-              <motion.div variants={itemVariants} className="mt-6 rounded-2xl border border-gray-100 bg-white/80">
-                {instances.map((instanceAnswers, index) => (
-                  <div
-                    key={`${loop.id}-summary-${index}`}
-                    className="border-b border-gray-100 px-4 py-3 last:border-b-0"
-                  >
-                    <div className="text-sm font-semibold text-gray-800">
-                      {getLoopInstanceTitle(loop.id, instanceAnswers, index + 1)}
+              {requiredCount > 0 && (
+                <motion.div variants={itemVariants} className="typeform-muted-copy mt-3 text-sm">
+                  {requiredRemaining > 0
+                    ? `${requiredRemaining} more ${requiredRemaining === 1 ? loop.label.toLowerCase() : (loop.pluralLabel ?? `${loop.label}s`).toLowerCase()} required from the step list.`
+                    : `All ${requiredCount} step-list ${requiredCount === 1 ? 'answer has' : 'answers have'} been covered.`}
+                </motion.div>
+              )}
+              <motion.div variants={itemVariants} className="typeform-surface mt-6 rounded-2xl border">
+                {instances.map((instanceAnswers, index) => {
+                  const title = getLoopInstanceTitle(loop.id, instanceAnswers, index + 1);
+                  const titlePulledFromStepList =
+                    loop.requiredStepListQuestionId !== undefined &&
+                    getStepListAnswers(loop.requiredStepListQuestionId)[index] === title;
+                  return (
+                    <div
+                      key={`${loop.id}-summary-${index}`}
+                      className="px-4 py-3 last:border-b-0"
+                      style={{ borderBottom: index === instances.length - 1 ? 'none' : '1px solid var(--color-border)' }}
+                    >
+                      <div
+                        className="text-sm font-semibold"
+                        style={{ color: titlePulledFromStepList ? 'var(--color-primary)' : 'var(--color-text)' }}
+                      >
+                        {title}
+                      </div>
+                      <div className="typeform-muted-copy mt-1 text-xs">
+                        {Object.keys(instanceAnswers).length} answers captured
+                      </div>
                     </div>
-                    <div className="mt-1 text-xs text-gray-500">
-                      {Object.keys(instanceAnswers).length} answers captured
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </motion.div>
               {submitError && (
                 <motion.div
@@ -1407,14 +1740,16 @@ const Questions: React.FC<QuestionsProps> = ({
                 </motion.div>
               )}
               <motion.div variants={itemVariants} className="mt-8 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  className="typeform-button"
-                  onClick={handleAddRepeatInstance}
-                  disabled={submitting || maxReached}
-                >
-                  {loop.addAnotherLabel ?? `Add another ${loop.label.toLowerCase()}`}
-                </button>
+                {!isStepListMatchedLoop && (
+                  <button
+                    type="button"
+                    className="typeform-button"
+                    onClick={handleAddRepeatInstance}
+                    disabled={!canAddAnother}
+                  >
+                    {loop.addAnotherLabel ?? `Add another ${loop.label.toLowerCase()}`}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="rounded-lg border px-6 py-3 text-base font-medium text-white transition-all duration-300 hover:shadow-sm disabled:opacity-60"
@@ -1424,15 +1759,15 @@ const Questions: React.FC<QuestionsProps> = ({
                     color: '#fff',
                   }}
                   onClick={() => void handleContinueFromRepeatLoop()}
-                  disabled={submitting}
+                  disabled={!canContinue}
                 >
                   {submitting ? 'Saving...' : loop.continueLabel ?? 'Continue'}
                 </button>
               </motion.div>
               {maxReached && (
-                <motion.div variants={itemVariants} className="mt-3 text-xs text-gray-500">
-                  Maximum {loop.label.toLowerCase()} count reached.
-                </motion.div>
+              <motion.div variants={itemVariants} className="typeform-muted-copy mt-3 text-xs">
+                Maximum {loop.label.toLowerCase()} count reached.
+              </motion.div>
               )}
             </motion.div>
           </div>
@@ -1445,7 +1780,11 @@ const Questions: React.FC<QuestionsProps> = ({
     return (
       <div
         className={`typeform-fullscreen${previewMode ? ' typeform-preview' : ''}`}
-        style={themeStyles}
+        style={{
+          ...themeStyles,
+          backgroundColor: 'var(--color-background)',
+          color: 'var(--color-text)',
+        }}
       >
         {logoUrl && (
           <div className="absolute top-6 left-1/2 -translate-x-1/2">
@@ -1480,7 +1819,7 @@ const Questions: React.FC<QuestionsProps> = ({
               </div>
             )}
             <h2 className="typeform-heading">{endScreen.text}</h2>
-            {form.description && <p className="typeform-text">{form.description}</p>}
+            {endDescription && <p className="typeform-text">{endDescription}</p>}
             {!previewMode && endFooterText && (
               <p className="typeform-text">
                 {endFooterText}
@@ -1533,7 +1872,11 @@ const Questions: React.FC<QuestionsProps> = ({
     return (
       <div
         className={`typeform-fullscreen${previewMode ? ' typeform-preview' : ''}`}
-        style={themeStyles}
+        style={{
+          ...themeStyles,
+          backgroundColor: 'var(--color-background)',
+          color: 'var(--color-text)',
+        }}
       >
         <div className={`typeform-content${previewMode ? ' typeform-content-preview' : ''}`}>
           <div className="typeform-card">
@@ -1560,7 +1903,12 @@ const Questions: React.FC<QuestionsProps> = ({
         <div className="absolute right-6 top-6 z-10">
           <button
             type="button"
-            className="rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-slate-800 disabled:opacity-60"
+            className="rounded-full border px-4 py-2 text-sm font-medium shadow-sm transition disabled:opacity-60"
+            style={{
+              borderColor: 'var(--color-border)',
+              backgroundColor: 'var(--color-card)',
+              color: 'var(--color-text-light)',
+            }}
             onClick={() => void handleSkipActiveLoopToFinish()}
             disabled={submitting}
           >
@@ -1573,7 +1921,7 @@ const Questions: React.FC<QuestionsProps> = ({
         <div className="typeform-thin-progress">
           <div 
             className="typeform-thin-progress-fill" 
-            style={{ width: `${((currentIndex + 1) / Math.max(flowQuestions.length, 1)) * 100}%` }}
+            style={{ width: `${(displayedFlowProgress.current / displayedFlowProgress.total) * 100}%` }}
           ></div>
         </div>
       </div>
@@ -1590,8 +1938,8 @@ const Questions: React.FC<QuestionsProps> = ({
           className={`typeform-content${isContentStep ? ' typeform-content-readable' : ''}${previewMode ? ' typeform-content-preview' : ''}`}
         >
           {/* Question counter - small and subtle */}
-          <div className="text-sm text-gray-400 mb-8 text-center font-medium">
-            Step {currentStep} of {flowQuestions.length}
+          <div className="typeform-subtle-copy mb-8 text-center text-sm font-medium">
+            Step {displayedFlowProgress.current} of {displayedFlowProgress.total}
           </div>
           {(saveWarning || submitError) && (
             <div
@@ -1617,30 +1965,56 @@ const Questions: React.FC<QuestionsProps> = ({
               <div className="flex w-full justify-center">
                 <motion.div
                   variants={itemVariants}
-                  className="w-full max-w-4xl rounded-[32px] border border-slate-200/80 bg-white/85 px-6 py-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur sm:px-10 sm:py-10"
+                  className="w-full max-w-4xl rounded-[32px] border px-6 py-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur sm:px-10 sm:py-10"
+                  style={{
+                    borderColor: 'var(--color-border)',
+                    backgroundColor: 'color-mix(in srgb, var(--color-card) 88%, transparent)',
+                    color: 'var(--color-text)',
+                  }}
                 >
                   <div className="flex flex-col gap-6">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <span className="inline-flex w-fit rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold tracking-[0.12em] text-blue-700">
+                      <span
+                        className="inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold tracking-[0.12em]"
+                        style={{
+                          borderColor: 'var(--color-primary)',
+                          backgroundColor: 'var(--color-primary-soft)',
+                          color: 'var(--color-primary)',
+                        }}
+                      >
                         {totalGroups > 0 && currentGroupIndex >= 0
                           ? `Section ${currentGroupIndex + 1} of ${totalGroups}`
                           : 'Section'}
                       </span>
                       {groupQuestionCount > 0 && (
-                        <span className="inline-flex w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold tracking-[0.12em] text-emerald-700 sm:ml-auto">
+                        <span
+                          className="inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold tracking-[0.12em] sm:ml-auto"
+                          style={{
+                            borderColor: 'var(--color-border)',
+                            backgroundColor: 'var(--color-card-muted)',
+                            color: 'var(--color-text-light)',
+                          }}
+                        >
                           {groupQuestionCount} {groupQuestionCount === 1 ? 'question ahead' : 'questions ahead'}
                         </span>
                       )}
                     </div>
                     <div className="mx-auto max-w-3xl text-center">
-                      <h2 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-5xl">
+                      <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl" style={{ color: 'var(--color-text)' }}>
                         {cleanedGroupTitle}
                       </h2>
-                      <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
+                      <p className="mx-auto mt-4 max-w-2xl text-base leading-7 sm:text-lg" style={{ color: 'var(--color-text-light)' }}>
                         {groupSummary}
                       </p>
                     </div>
-                    <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-slate-50/80 px-5 py-4 text-center text-sm leading-6 text-slate-600">
+                    <div
+                      className="mx-auto max-w-3xl rounded-2xl border px-5 py-4 text-center text-sm leading-6"
+                      style={{
+                        borderColor: 'var(--color-border)',
+                        backgroundColor: 'var(--color-card-muted)',
+                        color: 'var(--color-text-light)',
+                      }}
+                    >
                       You’re moving into a new topic area. Continue when you’re ready to start this section.
                     </div>
                     <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center sm:items-center">
@@ -1656,7 +2030,7 @@ const Questions: React.FC<QuestionsProps> = ({
                       >
                         {groupButtonLabel}
                       </motion.button>
-                      <span className="text-sm text-slate-500">press Enter ↵</span>
+                      <span className="typeform-muted-copy text-sm">press Enter ↵</span>
                     </div>
                   </div>
                 </motion.div>
@@ -1674,21 +2048,21 @@ const Questions: React.FC<QuestionsProps> = ({
                           : 'max-w-[400px]'
                   }`}
                 >
-                  <div className="hidden text-sm text-blue-600 font-medium leading-snug sm:flex items-center gap-2 self-start mt-[6px]">
-                    <span className="whitespace-nowrap">{currentStep}</span>
+                  <div className="hidden text-sm font-medium leading-snug sm:flex items-center gap-2 self-start mt-[6px]" style={{ color: 'var(--color-primary)' }}>
+                    <span className="whitespace-nowrap">{displayedFlowProgress.current}</span>
                     <span className="whitespace-nowrap">→</span>
                   </div>
-                  <div className="flex flex-col items-start text-left">
+                  <div ref={questionContentRef} className="flex flex-col items-start text-left">
                   {/* Question title */}
-                  <h2 className="text-[2rem] font-bold text-gray-800 leading-tight sm:text-2xl">
-                    {question.text}
-                    {isRequired && <span className="text-red-500 ml-1">*</span>}
+                  <h2 className="text-[2rem] font-bold leading-tight sm:text-2xl" style={{ color: 'var(--color-text)' }}>
+                    {renderResolvedText(displayedQuestionTextParts)}
+                    {isRequired && <span className="ml-1 text-red-500">*</span>}
                   </h2>
 
                   {/* Description - tight to title, space before input */}
                   {question.settings?.description && !isDetails && (
-                    <p className="text-gray-500 italic mt-1">
-                      {question.settings.description}
+                    <p className="typeform-muted-copy mt-1 italic">
+                      {renderResolvedText(displayedQuestionDescriptionParts)}
                     </p>
                   )}
 
@@ -1717,11 +2091,11 @@ const Questions: React.FC<QuestionsProps> = ({
                   {isDetails ? (
                     <motion.div
                       variants={itemVariants}
-                      className="w-full max-w-5xl rounded-2xl bg-white/80 px-4 py-5 shadow-sm border border-gray-100 sm:px-8 sm:py-7 lg:px-10 lg:py-9"
+                      className="typeform-surface w-full max-w-5xl rounded-2xl border px-4 py-5 shadow-sm sm:px-8 sm:py-7 lg:px-10 lg:py-9"
                     >
                       {question.settings?.description && (
-                        <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap leading-7">
-                          {question.settings.description}
+                        <div className="prose prose-sm max-w-none whitespace-pre-wrap leading-7" style={{ color: 'var(--color-text)' }}>
+                          {renderResolvedText(displayedQuestionDescriptionParts)}
                         </div>
                       )}
                       <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
@@ -1737,7 +2111,7 @@ const Questions: React.FC<QuestionsProps> = ({
                         >
                           {question.settings?.buttonLabel ?? 'Continue'}
                         </motion.button>
-                        <span className="text-sm text-gray-600">press Enter ↵</span>
+                        <span className="typeform-muted-copy text-sm">press Enter ↵</span>
                       </div>
                     </motion.div>
                   ) : answerType === 'multiple' ? (
@@ -1778,7 +2152,16 @@ const Questions: React.FC<QuestionsProps> = ({
                             type="text"
                             value={otherAnswerText}
                             onChange={(event) => updateOtherAnswerText(event.target.value)}
-                            className="w-full rounded-lg border border-blue-300 bg-white px-4 py-3 text-base text-gray-800 shadow-sm focus:border-blue-500 focus:outline-none"
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' && !event.shiftKey) {
+                                event.preventDefault();
+                                if (canContinue) {
+                                  continueCurrentStep();
+                                }
+                              }
+                            }}
+                            className="typeform-field-surface w-full rounded-lg border px-4 py-3 text-base shadow-sm focus:outline-none"
+                            style={{ borderColor: 'var(--color-primary)' }}
                             placeholder="Please specify..."
                             autoFocus
                           />
@@ -1812,9 +2195,9 @@ const Questions: React.FC<QuestionsProps> = ({
                   <div className="space-y-3">
                     {currentStepAnswers.map((step, index) => (
                       <div key={`step-answer-${index}`} className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
-                        <div className="w-full shrink-0 text-sm font-medium text-blue-700 sm:w-16">
+                        <div className="w-full shrink-0 text-sm font-medium sm:w-28" style={{ color: 'var(--color-primary)' }}>
                           {question.settings?.longTextFormat === 'steps'
-                            ? `Step ${index + 1}`
+                            ? getStepListLabel(question.settings, index)
                             : `${index + 1}.`}
                         </div>
                         <input
@@ -1835,18 +2218,26 @@ const Questions: React.FC<QuestionsProps> = ({
                               }
                             }
                           }}
-                          className="min-w-0 flex-1 rounded-xl border border-blue-200 bg-white px-4 py-3 text-gray-800 focus:border-blue-500 focus:outline-none"
+                          className="typeform-field-surface min-w-0 flex-1 rounded-xl border px-4 py-3 focus:outline-none"
+                          style={{ borderColor: 'var(--color-primary)' }}
                           placeholder={
                             question.settings?.longTextFormat === 'steps'
                               ? 'Describe this step...'
                               : 'Type an item...'
                           }
+                          autoFocus={index === preferredStepFocusIndex}
+                          data-autofocus-target={index === preferredStepFocusIndex ? 'true' : undefined}
                         />
                       </div>
                     ))}
                     <button
                       type="button"
-                      className="rounded-xl border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+                      className="rounded-xl border px-4 py-2 text-sm font-medium transition"
+                      style={{
+                        borderColor: 'var(--color-primary)',
+                        color: 'var(--color-primary)',
+                        backgroundColor: 'var(--color-primary-soft)',
+                      }}
                       onClick={() => {
                         setAnswers((prev) => ({
                           ...prev,
@@ -1862,11 +2253,14 @@ const Questions: React.FC<QuestionsProps> = ({
                 ) : (
                   <>
                     <textarea
+                      ref={longAnswerRef}
                       rows={1}
                       value={typeof currentAnswer === 'string' ? currentAnswer : ''}
-                      onChange={(event) =>
-                        setAnswers((prev) => ({ ...prev, [currentQuestionId]: event.target.value }))
-                      }
+                      onChange={(event) => {
+                        event.target.style.height = 'auto';
+                        event.target.style.height = `${Math.max(event.target.scrollHeight, 44)}px`;
+                        setAnswers((prev) => ({ ...prev, [currentQuestionId]: event.target.value }));
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' && !event.shiftKey) {
                           event.preventDefault();
@@ -1881,11 +2275,13 @@ const Questions: React.FC<QuestionsProps> = ({
                       maxLength={
                         question.settings?.maxCharactersEnabled ? question.settings.maxCharacters ?? undefined : undefined
                       }
-                      className="w-full bg-transparent text-gray-800 placeholder:text-blue-300 border-b border-blue-400 focus:outline-none resize-none p-0 leading-[1.2]"
-                      style={{ fontSize: '24px' }}
+                      className="typeform-field-underline w-full resize-none overflow-hidden p-0 leading-[1.2] focus:outline-none"
+                      style={{ fontSize: '24px', minHeight: '44px' }}
                       placeholder="Type your answer here..."
+                      autoFocus
+                      data-autofocus-target="true"
                     />
-                    <div className="text-sm text-blue-700" style={{ marginTop: '2px' }}>
+                    <div className="text-sm" style={{ marginTop: '2px', color: 'var(--color-primary)' }}>
                       <span className="font-medium">Shift</span> + Enter ↵ to make a line break
                     </div>
                   </>
@@ -1932,7 +2328,7 @@ const Questions: React.FC<QuestionsProps> = ({
                   const labels: Record<string, string> = { MM: 'Month', DD: 'Day', YYYY: 'Year' };
                   const widths: Record<string, string> = { MM: 'w-[72px] sm:w-[110px]', DD: 'w-[72px] sm:w-[110px]', YYYY: 'w-[104px] sm:w-[160px]' };
                   return (
-                    <div className="flex flex-nowrap items-end gap-2 text-blue-700 text-sm sm:gap-6">
+                    <div className="flex flex-nowrap items-end gap-2 text-sm sm:gap-6" style={{ color: 'var(--color-primary)' }}>
                       {parts.map((part, index) => (
                         <React.Fragment key={part}>
                           <div className="flex flex-col gap-2">
@@ -1940,11 +2336,13 @@ const Questions: React.FC<QuestionsProps> = ({
                             <input
                               type="text"
                               placeholder={part}
-                              className={`${widths[part]} text-[28px] text-blue-700 placeholder:text-blue-300 bg-transparent border-b border-blue-400 focus:outline-none sm:text-[36px]`}
+                              className={`${widths[part]} typeform-field-underline text-[28px] focus:outline-none sm:text-[36px]`}
+                              autoFocus={index === 0}
+                              data-autofocus-target={index === 0 ? 'true' : undefined}
                             />
                           </div>
                           {index < parts.length - 1 && (
-                            <div className="pb-2 text-[28px] text-blue-700 sm:text-[36px]">{separator}</div>
+                            <div className="pb-2 text-[28px] sm:text-[36px]">{separator}</div>
                           )}
                         </React.Fragment>
                       ))}
@@ -1978,8 +2376,10 @@ const Questions: React.FC<QuestionsProps> = ({
                   onChange={(event) =>
                     setAnswers((prev) => ({ ...prev, [currentQuestionId]: event.target.value }))
                   }
-                  className="w-full bg-transparent text-blue-700 placeholder:text-blue-300 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
+                  className="typeform-field-underline w-full p-0 text-[28px] leading-[1.2] focus:outline-none"
                   placeholder="name@example.com"
+                  autoFocus
+                  data-autofocus-target="true"
                 />
                 <motion.button
                   onClick={() => {
@@ -2027,9 +2427,22 @@ const Questions: React.FC<QuestionsProps> = ({
                           }}
                           className={`flex min-h-12 items-center rounded-xl border px-3 py-3 text-left shadow-sm transition sm:px-4 ${
                             selected
-                              ? 'border-blue-500 bg-blue-600 text-white'
-                              : 'border-blue-300 bg-white text-blue-700 hover:bg-blue-50'
+                              ? ''
+                              : ''
                           } ${hasLabel ? 'w-full gap-3' : 'min-w-12 justify-center text-lg font-semibold'}`}
+                          style={
+                            selected
+                              ? {
+                                  borderColor: 'var(--color-primary)',
+                                  backgroundColor: 'var(--color-primary)',
+                                  color: 'var(--color-primary-contrast)',
+                                }
+                              : {
+                                  borderColor: 'var(--color-border)',
+                                  backgroundColor: 'var(--color-card)',
+                                  color: 'var(--color-primary)',
+                                }
+                          }
                           variants={buttonVariants}
                           whileHover="hover"
                           whileTap="tap"
@@ -2067,8 +2480,10 @@ const Questions: React.FC<QuestionsProps> = ({
                       max={
                         question.settings?.maxNumberEnabled ? question.settings.maxNumber : undefined
                       }
-                      className="block w-full max-w-3xl bg-transparent text-blue-700 placeholder:text-blue-300 border-b border-blue-400 focus:outline-none p-0 text-[28px] leading-[1.2]"
+                      className="typeform-field-underline block w-full max-w-3xl p-0 text-[28px] leading-[1.2] focus:outline-none"
                       placeholder="Type your answer here..."
+                      autoFocus
+                      data-autofocus-target="true"
                     />
                     {numberUnitChoices.length > 0 && (
                       <div className="mt-5 flex flex-col gap-3 w-full max-w-3xl items-start">
@@ -2136,7 +2551,7 @@ const Questions: React.FC<QuestionsProps> = ({
                 >
                   {question.settings?.buttonLabel ?? 'Continue'}
                 </motion.button>
-                <span className="text-sm text-gray-600">press Enter ↵</span>
+                <span className="typeform-muted-copy text-sm">press Enter ↵</span>
               </motion.div>
             ) : (
               <motion.div 
@@ -2174,7 +2589,7 @@ const Questions: React.FC<QuestionsProps> = ({
               <motion.button
                 variants={itemVariants}
                 onClick={handlePrevious}
-                className="mt-8 text-gray-500 hover:text-gray-700 text-sm font-medium flex items-center self-start"
+                className="typeform-muted-copy mt-8 text-sm font-medium flex items-center self-start"
               >
                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -2186,7 +2601,7 @@ const Questions: React.FC<QuestionsProps> = ({
             {scoringEnabled && (
               <motion.div 
                 variants={itemVariants}
-                className="text-gray-400 text-sm mt-16 font-medium"
+                className="typeform-subtle-copy mt-16 text-sm font-medium"
               >
                 Current score: {score} / {totalScore}
               </motion.div>

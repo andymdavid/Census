@@ -44,6 +44,45 @@ describe('formValidation', () => {
     expect(errors).toContain('Question 1 has an invalid choice key style.');
   });
 
+  it('validates step list count and labels', () => {
+    const valid = createForm([
+      {
+        id: 1,
+        text: 'Describe the process',
+        weight: 1,
+        category: 'Text',
+        settings: {
+          answerType: 'long',
+          longTextFormat: 'steps',
+          stepListCount: 5,
+          stepListLabels: ['Trigger', 'Action', 'Review', 'Approval', 'Done'],
+        },
+      },
+    ]);
+    const invalid = createForm([
+      {
+        id: 1,
+        text: 'Describe the process',
+        weight: 1,
+        category: 'Text',
+        settings: {
+          answerType: 'long',
+          longTextFormat: 'steps',
+          stepListCount: 6 as 1,
+          stepListLabels: ['Step 1', 2 as unknown as string],
+        },
+      },
+    ]);
+
+    expect(parseAndValidateFormSchema(valid).errors).toEqual([]);
+    expect(parseAndValidateFormSchema(invalid).errors).toEqual(
+      expect.arrayContaining([
+        'Question 1 has an invalid step list count.',
+        'Question 1 has invalid step list labels.',
+      ])
+    );
+  });
+
   it('accepts operator-based branching on supported question types', () => {
     const form = createForm([
       {
@@ -383,6 +422,43 @@ describe('formValidation', () => {
     });
 
     expect(errors).toEqual([]);
+  });
+
+  it('accepts incomplete Other answers for drafts only', () => {
+    const form = createForm([
+      {
+        id: 1,
+        text: 'Pick one',
+        weight: 1,
+        category: 'Multiple Choice',
+        settings: { answerType: 'multiple', choices: ['Alpha', 'Beta'], otherOption: true },
+      },
+    ]);
+
+    const draftErrors = validateResponseSubmission(form, {
+      answers: [{ questionId: '1', answer: 'Other:' }],
+      score: 1,
+      completed: false,
+      meta: {
+        visitedQuestionIds: [1],
+        lastQuestionId: 1,
+        completed: false,
+      },
+    });
+
+    const completedErrors = validateResponseSubmission(form, {
+      answers: [{ questionId: '1', answer: 'Other:' }],
+      score: 1,
+      completed: true,
+      meta: {
+        visitedQuestionIds: [1],
+        lastQuestionId: 1,
+        completed: true,
+      },
+    });
+
+    expect(draftErrors).toEqual([]);
+    expect(completedErrors).toContain('Question 1 has an invalid answer value.');
   });
 
   it('rejects numeric answers outside configured min and max bounds', () => {
