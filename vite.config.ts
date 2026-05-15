@@ -40,7 +40,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: clientPort,
     strictPort: true,
-    allowedHosts: ['near-pin-rose.wm3.otherstuff.ai'],
+    allowedHosts: ['near-pin-rose.wm3.otherstuff.ai', 'census.otherstuff.ai'],
     proxy: {
       '/api': 'http://localhost:3002',
     },
